@@ -5,8 +5,9 @@
 #   docker network create web        # once
 #   docker compose up -d             # from deploy/vm/
 #
-# Certs: HTTP-01 (.well-known/acme-challenge) on :80. Requires Azure NSG to allow
-# inbound 80 + 443 and Cloudflare A records (DNS-only) for *.technexus.info.
+# Certs: Let's Encrypt DNS-01 via Cloudflare (CF_DNS_API_TOKEN) — works behind the
+# Cloudflare proxy (orange cloud), no port-80 dependency. Set SSL/TLS mode to
+# Full (Strict) in Cloudflare so it trusts the LE cert on the origin.
 name: maria-edge
 
 networks:
@@ -34,6 +35,10 @@ services:
     image: traefik:v3.5
     restart: unless-stopped
     depends_on: [dockerproxy]
+    # CF_DNS_API_TOKEN: scoped Cloudflare token (Zone.DNS:Edit + Zone:Read) for the
+    # DNS-01 challenge. Works behind Cloudflare's proxy (no port-80 dependency).
+    environment:
+      - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN}
     command:
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
@@ -45,9 +50,10 @@ services:
       # Force HTTPS: redirect all :80 -> :443
       - --entrypoints.web.http.redirections.entrypoint.to=websecure
       - --entrypoints.web.http.redirections.entrypoint.scheme=https
-      # Let's Encrypt via HTTP-01 challenge (.well-known)
-      - --certificatesresolvers.le.acme.httpchallenge=true
-      - --certificatesresolvers.le.acme.httpchallenge.entrypoint=web
+      # Let's Encrypt via DNS-01 (Cloudflare) — works behind the CF proxy; no port 80.
+      - --certificatesresolvers.le.acme.dnschallenge=true
+      - --certificatesresolvers.le.acme.dnschallenge.provider=cloudflare
+      - --certificatesresolvers.le.acme.dnschallenge.resolvers=1.1.1.1:53,8.8.8.8:53
       - --certificatesresolvers.le.acme.email=${ACME_EMAIL}
       - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json
       # Dashboard on :8080, bound to localhost only (reach via SSH tunnel)
