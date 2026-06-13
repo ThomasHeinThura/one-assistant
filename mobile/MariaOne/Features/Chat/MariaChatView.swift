@@ -1,20 +1,30 @@
 import SwiftUI
 
+struct ChatAnswer: Decodable { let answer: String; let model: String?; let grounded: Bool? }
+
 struct ChatMessage: Identifiable { let id = UUID(); let text: String; let mine: Bool }
 
 @MainActor
 final class ChatModel: ObservableObject {
     @Published var messages: [ChatMessage] = [
-        .init(text: "Morning. Thai Bank’s SLA deal is at-risk — 21 days quiet. Want a check-in draft?", mine: false)
+        .init(text: "Hi — I'm Maria. Ask me about any client, deal, ticket, or what needs attention today.", mine: false)
     ]
     @Published var input = ""
+    @Published var thinking = false
 
     func send() async {
         let q = input.trimmingCharacters(in: .whitespaces)
-        guard !q.isEmpty else { return }
+        guard !q.isEmpty, !thinking else { return }
         messages.append(.init(text: q, mine: true)); input = ""
-        // Backend /chat is the RAG-grounded answer (AgentScope + Qdrant in M2).
-        messages.append(.init(text: "On it — checking CRM, visits, and tickets…", mine: false))
+        thinking = true
+        defer { thinking = false }
+        do {
+            let r = try await APIClient.shared.ask(q)
+            messages.append(.init(text: r.answer, mine: false))
+        } catch {
+            let msg = (error as? APIClient.APIError)?.errorDescription ?? "Couldn't reach Maria. Try again."
+            messages.append(.init(text: msg, mine: false))
+        }
     }
 }
 
@@ -22,7 +32,7 @@ struct MariaChatView: View {
     @StateObject private var model = ChatModel()
 
     var body: some View {
-        VStack {
+        VStack(spacing: 0) {
             HStack { Image(systemName: "sparkles").foregroundStyle(.purple); Text("Maria").bold() }
                 .padding(.top, 12)
             ScrollView {
@@ -36,11 +46,20 @@ struct MariaChatView: View {
                         if !m.mine { Spacer() }
                     }.padding(.horizontal)
                 }
+                if model.thinking {
+                    HStack {
+                        ProgressView().scaleEffect(0.8)
+                        Text("Maria is thinking…").font(.caption).foregroundStyle(.secondary)
+                        Spacer()
+                    }.padding(.horizontal)
+                }
             }
             HStack {
                 TextField("Ask about any client, deal, or ticket…", text: $model.input)
                     .textFieldStyle(.roundedBorder)
+                    .onSubmit { Task { await model.send() } }
                 Button("Send") { Task { await model.send() } }
+                    .disabled(model.thinking)
             }.padding()
         }
     }

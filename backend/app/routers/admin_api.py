@@ -193,18 +193,42 @@ async def test_mcp(mcp_id: UUID) -> dict:
         if not (base and slug and key):
             detail = "set PLANE_BASE_URL, PLANE_WORKSPACE_SLUG, and PLANE_API_KEY"
         else:
-            status, kind, why = await _probe(
-                f"{base.rstrip('/')}/api/v1/workspaces/{slug}/projects/", {"X-API-Key": key})
-            detail = "Plane REST reachable; API key valid" if status == "connected" else f"Plane: {why or kind}"
+            try:
+                async with httpx.AsyncClient(timeout=12) as c:
+                    r = await c.get(f"{base.rstrip('/')}/api/v1/workspaces/{slug}/projects/",
+                                    headers={"X-API-Key": key})
+                if r.status_code == 200:
+                    j = r.json()
+                    n = j.get("total_count", j.get("count", len(j.get("results", []))))
+                    status, detail = "connected", f"Plane connected — {n} project(s) in '{slug}'"
+                elif r.status_code in (401, 403):
+                    detail = "Plane: API key rejected (401/403)"
+                else:
+                    detail = f"Plane: HTTP {r.status_code}"
+            except Exception as exc:
+                detail = f"Plane: cannot reach host: {str(exc)[:120]}"
     elif row["kind"] == "notion":
         token = env.get("NOTION_TOKEN")
         if not token:
             detail = "set NOTION_TOKEN"
         else:
-            status, kind, why = await _probe(
-                "https://api.notion.com/v1/users/me",
-                {"Authorization": f"Bearer {token}", "Notion-Version": "2022-06-28"})
-            detail = "Notion API reachable; token valid" if status == "connected" else f"Notion: {why or kind}"
+            try:
+                async with httpx.AsyncClient(timeout=12) as c:
+                    r = await c.post("https://api.notion.com/v1/search",
+                                     headers={"Authorization": f"Bearer {token}",
+                                              "Notion-Version": "2022-06-28",
+                                              "Content-Type": "application/json"},
+                                     json={"filter": {"property": "object", "value": "database"},
+                                           "page_size": 100})
+                if r.status_code == 200:
+                    n = len(r.json().get("results", []))
+                    status, detail = "connected", f"Notion connected — {n} database(s) accessible"
+                elif r.status_code in (401, 403):
+                    detail = "Notion: token rejected (401/403)"
+                else:
+                    detail = f"Notion: HTTP {r.status_code}"
+            except Exception as exc:
+                detail = f"Notion: cannot reach host: {str(exc)[:120]}"
     elif is_openrouter:
         key = env.get("OPENROUTER_API_KEY")
         if not key:

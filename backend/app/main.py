@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import get_settings
 from .db import close_pool, init_pool
-from .routers import admin_api, chat, clients, health, opportunities, tickets, today, visits
+from .routers import admin_api, auth, chat, clients, health, opportunities, tickets, today, visits
 
 log = logging.getLogger("maria.api")
 
@@ -55,7 +55,7 @@ async def security_headers(request: Request, call_next):
     return resp
 
 
-for r in (health.router, today.router, clients.router, visits.router,
+for r in (health.router, auth.router, today.router, clients.router, visits.router,
           opportunities.router, tickets.router, chat.router, admin_api.router):
     app.include_router(r)
 

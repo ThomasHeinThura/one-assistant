@@ -51,6 +51,42 @@ async def ping_model(settings: Settings, model: str, api_key: str | None = None)
         return False, f"unreachable: {str(exc)[:80]}"
 
 
+async def complete(
+    settings: Settings,
+    messages: list[dict],
+    *,
+    api_key: str | None = None,
+    max_tokens: int = 700,
+    title: str = "Maria One",
+) -> str:
+    """Chat completion over the pinned no-logging model chain (Tier 2/3 only).
+
+    Tries each pinned model in order; raises OpenRouterError if all fail so the
+    caller can fall back to a deterministic answer. Enforces data_collection=deny.
+    """
+    key = api_key or settings.openrouter_api_key
+    if not key:
+        raise OpenRouterError("OPENROUTER_API_KEY not configured")
+    headers = {"Authorization": f"Bearer {key}", "X-Title": title, "Content-Type": "application/json"}
+    last_err: Exception | None = None
+    async with httpx.AsyncClient(base_url=settings.openrouter_base_url, timeout=45) as client:
+        for model in settings.openrouter_models:
+            body = {
+                "model": model,
+                "messages": messages,
+                "max_tokens": max_tokens,
+                "provider": {"data_collection": "deny"},  # fail closed: no logging/training
+            }
+            try:
+                resp = await client.post("/chat/completions", headers=headers, json=body)
+                resp.raise_for_status()
+                return resp.json()["choices"][0]["message"]["content"].strip()
+            except Exception as exc:
+                last_err = exc
+                continue
+    raise OpenRouterError(f"all pinned no-logging models failed: {last_err}")
+
+
 async def draft_mom(settings: Settings, prompt: str, *, title: str = "Maria One", tier: int = 2) -> str:
     if not settings.openrouter_api_key:
         raise OpenRouterError("OPENROUTER_API_KEY not configured")

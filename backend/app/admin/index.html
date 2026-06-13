@@ -178,15 +178,17 @@
 <!-- ===================== Auth overlay ===================== -->
 <div class="lock" id="lock">
   <div class="lock-card">
-    <div class="lk-logo">🔒</div>
-    <h3>Unlock admin console</h3>
-    <p>Enter the backend API token to load live data. It's stored in this browser only.</p>
-    <label for="lockInput">API token</label>
-    <input id="lockInput" type="password" autocomplete="off" spellcheck="false"
-           placeholder="backend .env API_TOKEN" />
+    <div class="lk-logo">✦</div>
+    <h3>Sign in to Maria One</h3>
+    <p>Admin console — sign in with your operator account.</p>
+    <label for="lockUser">Username</label>
+    <input id="lockUser" type="text" autocomplete="username" spellcheck="false" placeholder="thomas" />
+    <label for="lockInput" style="margin-top:12px">Password</label>
+    <input id="lockInput" type="password" autocomplete="current-password" spellcheck="false"
+           placeholder="••••••••" />
     <div class="lk-err" id="lockErr"></div>
-    <button class="btn primary lk-btn" id="lockBtn">Unlock</button>
-    <div class="lk-hint">Tip: append <code>?token=…</code> to the URL to unlock automatically.</div>
+    <button class="btn primary lk-btn" id="lockBtn">Sign in</button>
+    <div class="lk-hint">Sessions stay signed in on this browser until you sign out.</div>
   </div>
 </div>
 
@@ -498,21 +500,25 @@
   const TKEY = 'maria.adminToken';
   let TOKEN = localStorage.getItem(TKEY) || new URLSearchParams(location.search).get('token') || '';
   if (TOKEN) localStorage.setItem(TKEY, TOKEN);
+  const UKEY = 'maria.adminUser';
+  let USER = localStorage.getItem(UKEY) || '';
   const $lock = document.getElementById('lock');
+  const $lockUser = document.getElementById('lockUser');
   const $lockInput = document.getElementById('lockInput');
   const $lockErr = document.getElementById('lockErr');
   const $lockBtn = document.getElementById('lockBtn');
 
   function reflectToken() {
-    document.getElementById('tokenState').textContent = TOKEN ? 'token set' : 'locked';
+    document.getElementById('tokenState').textContent = TOKEN ? (USER || 'signed in') : 'sign in';
     document.getElementById('tokenBtn').className = 'btn sm ' + (TOKEN ? 'ghost' : 'primary');
   }
   function showLock(msg) {
-    $lockInput.value = TOKEN || '';
+    $lockUser.value = USER || '';
+    $lockInput.value = '';
     $lockErr.classList.toggle('show', !!msg);
     if (msg) $lockErr.textContent = msg;
     $lock.classList.add('show');
-    setTimeout(() => $lockInput.focus(), 50);
+    setTimeout(() => (USER ? $lockInput : $lockUser).focus(), 50);
   }
   function hideLock() { $lock.classList.remove('show'); $lockErr.classList.remove('show'); }
 
@@ -522,25 +528,37 @@
       ...opts,
     });
 
-  // Validate a candidate token, then unlock + load. Called from the overlay.
+  // Sign in with username + password; the server returns the bearer token.
   async function tryUnlock() {
-    const t = $lockInput.value.trim();
-    if (!t) { $lockErr.textContent = 'Enter a token.'; $lockErr.classList.add('show'); return; }
-    $lockBtn.textContent = 'Checking…'; $lockBtn.disabled = true;
-    const prev = TOKEN; TOKEN = t;
-    let ok = false;
-    try { ok = (await api('/overview')).ok; } catch (e) {}
-    $lockBtn.textContent = 'Unlock'; $lockBtn.disabled = false;
-    if (ok) {
-      localStorage.setItem(TKEY, TOKEN); reflectToken(); hideLock(); refreshAll();
+    const u = $lockUser.value.trim(), pw = $lockInput.value;
+    if (!u || !pw) { $lockErr.textContent = 'Enter username and password.'; $lockErr.classList.add('show'); return; }
+    $lockBtn.textContent = 'Signing in…'; $lockBtn.disabled = true;
+    let data = null, status = 0;
+    try {
+      const r = await fetch('/auth/login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: u, password: pw }),
+      });
+      status = r.status;
+      if (r.ok) data = await r.json();
+    } catch (e) {}
+    $lockBtn.textContent = 'Sign in'; $lockBtn.disabled = false;
+    if (data && data.token) {
+      TOKEN = data.token; USER = (data.user && data.user.name) || u;
+      localStorage.setItem(TKEY, TOKEN); localStorage.setItem(UKEY, USER);
+      reflectToken(); hideLock(); refreshAll();
     } else {
-      TOKEN = prev;
-      $lockErr.textContent = 'That token was rejected (401). Check the backend API_TOKEN.';
+      $lockErr.textContent = status === 401 ? 'Invalid username or password.'
+        : 'Sign-in failed (server error). Try again.';
       $lockErr.classList.add('show'); $lockInput.select();
     }
   }
+  function signOut() {
+    TOKEN = ''; localStorage.removeItem(TKEY); reflectToken(); showLock();
+  }
   $lockBtn.onclick = tryUnlock;
   $lockInput.addEventListener('keydown', e => { if (e.key === 'Enter') tryUnlock(); });
+  $lockUser.addEventListener('keydown', e => { if (e.key === 'Enter') $lockInput.focus(); });
 
   function refreshAll() { loadOverview(); loadMcp(); loadSkills(); loadModels(); loadHealth(); }
   const esc = s => (s ?? '').toString().replace(/[<>&]/g, c => ({ '<':'&lt;','>':'&gt;','&':'&amp;' }[c]));
@@ -712,15 +730,18 @@
     });
   }
 
-  document.getElementById('tokenBtn').onclick = () => showLock();
+  document.getElementById('tokenBtn').onclick = () => {
+    if (TOKEN && confirm('Sign out of the admin console?')) signOut();
+    else if (!TOKEN) showLock();
+  };
   reflectToken();
-  // Validate any stored/URL token on load; show the overlay if missing or rejected.
+  // Validate any stored token on load; show the sign-in overlay if missing or expired.
   (async () => {
     if (!TOKEN) { showLock(); return; }
     let ok = false;
     try { ok = (await api('/overview')).ok; } catch (e) {}
     if (ok) refreshAll();
-    else showLock('Your saved token was rejected. Enter a valid API token.');
+    else showLock('Your session expired — please sign in again.');
   })();
 </script>
 </body>

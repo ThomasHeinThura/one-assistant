@@ -56,6 +56,13 @@ actor APIClient {
     func tickets() async throws -> [Ticket] { try await get("tickets") }
     func ticket(_ id: UUID) async throws -> Ticket { try await get("tickets/\(id)") }
 
+    /// Ask Maria — RAG/CRM-grounded answer from the backend (cloud Tier 2/3).
+    func ask(_ question: String) async throws -> ChatAnswer {
+        struct Body: Encodable { let question: String }
+        let data = try await request("chat", method: "POST", body: Body(question: question))
+        return try decoder.decode(ChatAnswer.self, from: data)
+    }
+
     func checkIn(visit: UUID, lat: Double, lng: Double) async throws {
         struct Body: Encodable { let lat: Double; let lng: Double }
         _ = try await request("visits/\(visit)/checkin", method: "POST", body: Body(lat: lat, lng: lng))
