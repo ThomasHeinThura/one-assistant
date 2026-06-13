@@ -17,10 +17,61 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from ..config import get_settings
 from ..db import pool, tx
+from ..integrations import openrouter
 from ..security import require_auth
 
 router = APIRouter(prefix="/admin/api", tags=["admin"], dependencies=[Depends(require_auth)])
+
+
+# ------------------------------------------------------------------- overview KPIs
+@router.get("/overview")
+async def overview() -> dict:
+    p = pool()
+    ob = await p.fetchrow(
+        """SELECT
+             count(*) FILTER (WHERE status IN ('pending','processing')) AS pending,
+             count(*) FILTER (WHERE status = 'failed')                  AS failed,
+             count(*) FILTER (WHERE status IN ('done','verified'))      AS verified
+           FROM outbox""")
+    mcp = await p.fetchrow(
+        "SELECT count(*) AS total, count(*) FILTER (WHERE status='connected') AS connected FROM mcp_integrations")
+    models = await p.fetchrow(
+        "SELECT count(*) AS total, count(*) FILTER (WHERE ready) AS ready FROM ai_models")
+    return {
+        "outbox": {"pending": ob["pending"], "failed": ob["failed"], "verified": ob["verified"]},
+        "integrations": {"total": mcp["total"], "connected": mcp["connected"]},
+        "models": {"total": models["total"], "ready": models["ready"]},
+    }
+
+
+# ----------------------------------------------------------------------- AI models
+@router.get("/models")
+async def list_models() -> list[dict]:
+    return [dict(r) for r in await pool().fetch("SELECT * FROM ai_models ORDER BY sort, name")]
+
+
+@router.post("/models/{model_id}/test")
+async def test_model(model_id: UUID) -> dict:
+    row = await pool().fetchrow("SELECT * FROM ai_models WHERE id=$1", model_id)
+    if not row:
+        raise HTTPException(404, "model not found")
+
+    if row["provider"] == "on_device":
+        status, ready, detail = "on_device", True, "On-device (Apple MLX) — drafts Tier-1 with no cloud. Test from the iOS app."
+    else:
+        settings = get_settings()
+        # Prefer the key stored on the OpenRouter integration, else the env key.
+        orow = await pool().fetchrow("SELECT env FROM mcp_integrations WHERE name='OpenRouter'")
+        key = (orow["env"] or {}).get("OPENROUTER_API_KEY") if orow else None
+        ok, detail = await openrouter.ping_model(settings, row["model_id"], api_key=key)
+        status, ready = ("ready", True) if ok else ("error", False)
+
+    await pool().execute(
+        "UPDATE ai_models SET ready=$2, status=$3, detail=$4, last_checked_at=now() WHERE id=$1",
+        model_id, ready, status, detail)
+    return {"status": status, "ready": ready, "detail": detail}
 
 _SECRET_RE = re.compile(r"(KEY|TOKEN|SECRET|PASSWORD|PASS)$", re.IGNORECASE)
 

@@ -16,6 +16,36 @@ class OpenRouterError(RuntimeError):
     pass
 
 
+async def ping_model(settings: Settings, model: str, api_key: str | None = None) -> tuple[bool, str]:
+    """Minimal completion to verify a model is reachable + responsive.
+
+    Returns (ok, detail). Enforces data_collection: deny like all calls.
+    """
+    key = api_key or settings.openrouter_api_key
+    if not key:
+        return False, "no OpenRouter API key"
+    body = {
+        "model": model,
+        "messages": [{"role": "user", "content": "Reply with exactly: OK"}],
+        "max_tokens": 5,
+        "provider": {"data_collection": "deny"},
+    }
+    try:
+        async with httpx.AsyncClient(base_url=settings.openrouter_base_url, timeout=20) as client:
+            resp = await client.post("/chat/completions",
+                                     headers={"Authorization": f"Bearer {key}"}, json=body)
+        if resp.status_code == 200:
+            txt = resp.json()["choices"][0]["message"]["content"].strip()
+            return True, f"responsive (“{txt[:24]}”)"
+        if resp.status_code in (401, 403):
+            return False, "API key rejected"
+        if resp.status_code == 404:
+            return False, "model not available on OpenRouter"
+        return False, f"HTTP {resp.status_code}: {resp.text[:80]}"
+    except Exception as exc:
+        return False, f"unreachable: {str(exc)[:80]}"
+
+
 async def draft_mom(settings: Settings, prompt: str, *, title: str = "Maria One", tier: int = 2) -> str:
     if not settings.openrouter_api_key:
         raise OpenRouterError("OPENROUTER_API_KEY not configured")

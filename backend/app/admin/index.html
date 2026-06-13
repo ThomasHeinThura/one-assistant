@@ -183,6 +183,7 @@
       </div>
       <div class="spacer"></div>
       <div class="search"><span>⌕</span><input placeholder="Search settings, integrations, skills…" /></div>
+      <button class="btn ghost sm" id="tokenBtn" title="Set API token">🔑 <span id="tokenState">no token</span></button>
       <span class="env">PROD</span>
       <div class="avatar">HT</div>
     </header>
@@ -368,6 +369,20 @@
           <p>Cloud LLM applies to Tier 2/3 only. Tier 1 (confidential) is drafted entirely on-device
              and is <b>never</b> sent to the cloud.</p>
         </div>
+
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-h"><div><div class="ttl">Models</div>
+            <div class="desc">On-device Gemma 2B (MLX) + OpenRouter cloud chain. Test each for readiness.</div></div>
+            <span class="note" id="modelReady"></span></div>
+          <div class="card-b flush">
+            <table id="modelTbl">
+              <thead><tr><th>Model</th><th>Provider</th><th>Model ID</th><th>Tiers</th><th>Status</th><th></th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="card-b" style="border-top:1px solid var(--line-2)"><div id="modelMsg" class="note">Test a model to check it’s reachable and responsive.</div></div>
+        </div>
+
         <div class="card" style="max-width:680px">
           <div class="card-h"><div><div class="ttl">OpenRouter</div>
             <div class="desc">Pinned no-logging chain · <code>data_collection: "deny"</code> (fail-closed).</div></div>
@@ -443,10 +458,25 @@
 
   // Bearer token for the admin API (blank ok in dev). In prod the console
   // authenticates via Entra and injects the token here.
-  const TOKEN = new URLSearchParams(location.search).get('token') || '';
-  const hdr = TOKEN ? { 'Authorization': 'Bearer ' + TOKEN } : {};
+  // Token: localStorage (persisted) ← URL ?token= ← prompt. Sent as Bearer.
+  const TKEY = 'maria.adminToken';
+  let TOKEN = localStorage.getItem(TKEY) || new URLSearchParams(location.search).get('token') || '';
+  if (TOKEN) localStorage.setItem(TKEY, TOKEN);
+  function reflectToken() {
+    document.getElementById('tokenState').textContent = TOKEN ? 'token set' : 'no token';
+    document.getElementById('tokenBtn').className = 'btn sm ' + (TOKEN ? 'ghost' : 'primary');
+  }
+  function setToken() {
+    const t = prompt('Paste the API token (backend .env API_TOKEN):', TOKEN || '');
+    if (t == null) return;
+    TOKEN = t.trim(); localStorage.setItem(TKEY, TOKEN); reflectToken(); refreshAll();
+  }
   const api = (path, opts = {}) =>
-    fetch('/admin/api' + path, { headers: { 'Content-Type': 'application/json', ...hdr }, ...opts });
+    fetch('/admin/api' + path, {
+      headers: { 'Content-Type': 'application/json', ...(TOKEN ? { Authorization: 'Bearer ' + TOKEN } : {}) },
+      ...opts,
+    });
+  function refreshAll() { loadOverview(); loadMcp(); loadSkills(); loadModels(); loadHealth(); }
   const esc = s => (s ?? '').toString().replace(/[<>&]/g, c => ({ '<':'&lt;','>':'&gt;','&':'&amp;' }[c]));
   const tbody = sel => document.querySelector(sel + ' tbody');
 
@@ -454,7 +484,7 @@
   async function loadMcp() {
     const tb = tbody('#mcpTbl'); tb.innerHTML = '';
     let rows = [];
-    try { rows = await (await api('/mcp')).json(); } catch (e) {}
+    try { const r = await api('/mcp'); rows = r.ok ? await r.json() : []; } catch (e) {}
     const connected = rows.filter(r => r.status === 'connected').length;
     document.getElementById('mcpCount').textContent = `${rows.length} configured · ${connected} connected`;
     document.getElementById('kIntegrations').textContent = connected;
@@ -533,7 +563,7 @@
   async function loadSkills() {
     const tb = tbody('#skillTbl'); tb.innerHTML = '';
     let rows = [];
-    try { rows = await (await api('/skills')).json(); } catch (e) {}
+    try { const r = await api('/skills'); rows = r.ok ? await r.json() : []; } catch (e) {}
     document.getElementById('skillCount').textContent = `${rows.length} registered`;
     for (const s of rows) {
       const kindPill = s.kind === 'test' ? 'ai' : s.kind === 'builtin' ? 'neutral' : 'ok';
@@ -576,7 +606,50 @@
     } catch (e) {}
   }
 
-  loadMcp(); loadSkills(); loadHealth();
+  // ---------- Overview KPIs ----------
+  async function loadOverview() {
+    try {
+      const o = await (await api('/overview')).json();
+      document.getElementById('qPending').textContent  = o.outbox.pending;
+      document.getElementById('qFailed').textContent   = o.outbox.failed;
+      document.getElementById('qVerified').textContent = o.outbox.verified;
+      document.getElementById('kIntegrations').textContent = `${o.integrations.connected}/${o.integrations.total}`;
+    } catch (e) {
+      ['qPending','qFailed','qVerified','kIntegrations'].forEach(id => document.getElementById(id).textContent = '–');
+    }
+  }
+
+  // ---------- AI models ----------
+  async function loadModels() {
+    const tb = tbody('#modelTbl'); if (!tb) return; tb.innerHTML = '';
+    let rows = [];
+    try { const r = await api('/models'); rows = r.ok ? await r.json() : []; } catch (e) {}
+    let ready = 0;
+    for (const m of rows) {
+      if (m.ready) ready++;
+      const cls = m.status === 'ready' ? 'ok' : m.status === 'on_device' ? 'ai' : m.status === 'error' ? 'risk' : 'neutral';
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td><b>${esc(m.name)}</b><div class="sub">${esc(m.detail || '')}</div></td>
+        <td><span class="pill ${m.provider==='on_device'?'ai':'neutral'}">${esc(m.provider)}</span></td>
+        <td class="mono">${esc(m.model_id)}</td>
+        <td class="note">${esc(m.tier_use || '')}</td>
+        <td><span class="pill ${cls}"><span class="d"></span>${esc(m.status)}</span></td>
+        <td><button class="btn ghost sm" data-mtest="${m.id}">Test</button></td>`;
+      tb.appendChild(tr);
+    }
+    const rc = document.getElementById('modelReady'); if (rc) rc.textContent = `${ready}/${rows.length} ready`;
+    tb.querySelectorAll('[data-mtest]').forEach(b => b.onclick = async () => {
+      b.textContent = 'Testing…';
+      const r = await (await api(`/models/${b.dataset.mtest}/test`, { method:'POST' })).json().catch(()=>({}));
+      const el = document.getElementById('modelMsg'); if (el && r.detail) el.textContent = (r.status||'error') + ': ' + r.detail;
+      loadModels(); loadOverview();
+    });
+  }
+
+  document.getElementById('tokenBtn').onclick = setToken;
+  reflectToken();
+  if (!TOKEN) setTimeout(setToken, 300);   // first visit: prompt for the token
+  refreshAll();
 </script>
 </body>
 </html>
