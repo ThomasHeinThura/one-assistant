@@ -300,10 +300,11 @@
             <span class="note" id="mcpCount"></span></div>
           <div class="card-b flush">
             <table id="mcpTbl">
-              <thead><tr><th>Name</th><th>Kind</th><th>Transport</th><th>Endpoint</th><th>Enabled</th><th>Status</th><th></th></tr></thead>
+              <thead><tr><th>Name</th><th>Kind</th><th>Transport</th><th>Endpoint / Command</th><th>Env</th><th>Enabled</th><th>Status</th><th></th></tr></thead>
               <tbody></tbody>
             </table>
           </div>
+          <div class="card-b" style="border-top:1px solid var(--line-2)"><div id="mcpMsg" class="note">Use <b>+ Key/Env</b> to add a secret (e.g. PLANE_API_KEY), then <b>Test</b>.</div></div>
         </div>
 
         <div class="card">
@@ -313,11 +314,15 @@
               <div class="field"><label>Name</label><input id="mName" placeholder="e.g. Plane / Notion / Custom"/></div>
               <div class="field"><label>Kind</label><select id="mKind"><option>custom</option><option>plane</option><option>notion</option></select></div>
               <div class="field"><label>Transport</label><select id="mTransport"><option>http</option><option>sse</option><option>stdio</option></select></div>
-              <div class="field span2"><label>Endpoint (URL or launch command)</label><input id="mEndpoint" placeholder="https://… or npx @org/mcp-server"/></div>
-              <div class="field"><label>Auth — Key Vault secret name</label><input id="mAuthRef" placeholder="PLANE-API-KEY"/></div>
+              <div class="field span2 http-only"><label>Endpoint (URL)</label><input id="mEndpoint" placeholder="https://mcp.example.com/sse"/></div>
+              <div class="field http-only"><label>Auth — Key Vault secret name</label><input id="mAuthRef" placeholder="PLANE-API-KEY"/></div>
+              <div class="field stdio-only"><label>Command</label><input id="mCommand" placeholder="uvx"/></div>
+              <div class="field span2 stdio-only"><label>Args (space-separated)</label><input id="mArgs" placeholder="plane-mcp-server stdio"/></div>
+              <div class="field full stdio-only"><label>Env (KEY=VALUE per line — secrets allowed)</label>
+                <input id="mEnv" placeholder="PLANE_WORKSPACE_SLUG=bimdevops"/></div>
             </div>
             <div class="form-foot"><button class="btn primary" id="addMcp">+ Add integration</button>
-              <span class="note">New integrations start disabled — enable after a successful test.</span></div>
+              <span class="note">New integrations start disabled — add the API key, Test, then Enable.</span></div>
           </div>
         </div>
       </section>
@@ -455,32 +460,74 @@
     document.getElementById('kIntegrations').textContent = connected;
     for (const m of rows) {
       const cls = m.status === 'connected' ? 'ok' : m.status === 'error' ? 'risk' : m.status === 'disabled' ? 'neutral' : 'warn';
+      const target = m.transport === 'stdio'
+        ? (m.command ? `${esc(m.command)} ${esc((m.args||[]).join(' '))}` : '<span class="note">— no command</span>')
+        : (m.endpoint ? esc(m.endpoint) : '<span class="note">— not set</span>');
+      const envKeys = Object.keys(m.env || {});
+      const envCell = envKeys.length
+        ? envKeys.map(k => `<span class="pill neutral" title="${esc(k)}=${esc(String(m.env[k]))}">${esc(k)}</span>`).join(' ')
+        : '<span class="note">—</span>';
       const tr = document.createElement('tr');
       tr.innerHTML = `<td><b>${esc(m.name)}</b></td><td><span class="pill neutral">${esc(m.kind)}</span></td>
         <td class="mono">${esc(m.transport)}</td>
-        <td>${m.endpoint ? `<span class="mono">${esc(m.endpoint)}</span>` : '<span class="note">— not set</span>'}</td>
+        <td><span class="mono">${target}</span></td>
+        <td style="max-width:200px">${envCell}</td>
         <td>${m.enabled ? '<span class="pill ok"><span class="d"></span>on</span>' : '<span class="pill neutral">off</span>'}</td>
         <td><span class="pill ${cls}"><span class="d"></span>${esc(m.status)}</span></td>
         <td><div class="actions">
+          <button class="btn ghost sm" data-env="${m.id}" data-kind="${esc(m.kind)}">+ Key/Env</button>
           <button class="btn ghost sm" data-test="${m.id}">Test</button>
           <button class="btn ${m.enabled?'ghost':'primary'} sm" data-tog="${m.id}" data-en="${!m.enabled}">${m.enabled?'Disable':'Enable'}</button>
         </div></td>`;
       tb.appendChild(tr);
     }
+    tb.querySelectorAll('[data-env]').forEach(b => b.onclick = async () => {
+      const def = b.dataset.kind === 'plane' ? 'PLANE_API_KEY' : '';
+      const key = prompt('Env variable name (e.g. PLANE_API_KEY):', def);
+      if (!key) return;
+      const value = prompt(`Value for ${key} (stored on the server, hidden after save):`);
+      if (value == null) return;
+      await api(`/mcp/${b.dataset.env}/env`, { method: 'POST', body: JSON.stringify({ key, value }) });
+      loadMcp();
+    });
     tb.querySelectorAll('[data-test]').forEach(b => b.onclick = async () => {
-      b.textContent = 'Testing…'; await api(`/mcp/${b.dataset.test}/test`, { method: 'POST' }); loadMcp();
+      b.textContent = 'Testing…';
+      const r = await (await api(`/mcp/${b.dataset.test}/test`, { method: 'POST' })).json().catch(() => ({}));
+      const el = document.getElementById('mcpMsg');
+      if (el && r.detail) el.textContent = (r.status || 'error') + ': ' + r.detail;
+      loadMcp();
     });
     tb.querySelectorAll('[data-tog]').forEach(b => b.onclick = async () => {
       await api(`/mcp/${b.dataset.tog}?enabled=${b.dataset.en}`, { method: 'PATCH' }); loadMcp();
     });
   }
+  // Show only the relevant form fields per transport.
+  function syncMcpForm() {
+    const stdio = document.getElementById('mTransport').value === 'stdio';
+    document.querySelectorAll('.http-only').forEach(e => e.style.display = stdio ? 'none' : '');
+    document.querySelectorAll('.stdio-only').forEach(e => e.style.display = stdio ? '' : 'none');
+  }
+  document.getElementById('mTransport').addEventListener('change', syncMcpForm);
   document.getElementById('addMcp').onclick = async () => {
-    const body = { name: mName.value, kind: mKind.value, transport: mTransport.value,
-      endpoint: mEndpoint.value || null, auth_ref: mAuthRef.value || null, enabled: false };
+    const stdio = mTransport.value === 'stdio';
+    const env = {};
+    (mEnv.value || '').split(/\n|,/).map(s => s.trim()).filter(Boolean).forEach(line => {
+      const i = line.indexOf('='); if (i > 0) env[line.slice(0, i).trim()] = line.slice(i + 1).trim();
+    });
+    const body = {
+      name: mName.value, kind: mKind.value, transport: mTransport.value, enabled: false,
+      endpoint: stdio ? null : (mEndpoint.value || null),
+      auth_ref: stdio ? null : (mAuthRef.value || null),
+      command: stdio ? (mCommand.value || null) : null,
+      args: stdio ? (mArgs.value || '').split(/\s+/).filter(Boolean) : [],
+      env,
+    };
     if (!body.name) return;
     await api('/mcp', { method: 'POST', body: JSON.stringify(body) });
-    mName.value = mEndpoint.value = mAuthRef.value = ''; loadMcp();
+    mName.value = mEndpoint.value = mAuthRef.value = mCommand.value = mArgs.value = mEnv.value = '';
+    loadMcp();
   };
+  syncMcpForm();
 
   // ---------- Skills ----------
   async function loadSkills() {
