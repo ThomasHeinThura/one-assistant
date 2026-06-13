@@ -123,23 +123,45 @@ async def test_mcp(mcp_id: UUID) -> dict:
     env = row["env"] or {}
     status, detail = "error", ""
 
+    is_openrouter = row["name"] == "OpenRouter" or "openrouter.ai" in (row["endpoint"] or "")
+
+    async def _probe(url: str, headers: dict) -> tuple[str, str, str]:
+        try:
+            async with httpx.AsyncClient(timeout=10) as c:
+                r = await c.get(url, headers=headers)
+            if r.status_code == 200:
+                return "connected", "valid", ""
+            if r.status_code in (401, 403):
+                return "error", "rejected", "API key rejected (401/403)"
+            return "error", "http", f"HTTP {r.status_code}"
+        except Exception as exc:
+            return "error", "unreachable", f"cannot reach host: {str(exc)[:120]}"
+
     if row["kind"] == "plane":
-        base = env.get("PLANE_BASE_URL"); slug = env.get("PLANE_WORKSPACE_SLUG"); key = env.get("PLANE_API_KEY")
+        base, slug, key = env.get("PLANE_BASE_URL"), env.get("PLANE_WORKSPACE_SLUG"), env.get("PLANE_API_KEY")
         if not (base and slug and key):
             detail = "set PLANE_BASE_URL, PLANE_WORKSPACE_SLUG, and PLANE_API_KEY"
         else:
-            try:
-                async with httpx.AsyncClient(timeout=10) as c:
-                    r = await c.get(f"{base.rstrip('/')}/api/v1/workspaces/{slug}/projects/",
-                                    headers={"X-API-Key": key})
-                if r.status_code == 200:
-                    status, detail = "connected", "Plane REST reachable; API key valid"
-                elif r.status_code in (401, 403):
-                    detail = "Plane rejected the API key (401/403)"
-                else:
-                    detail = f"Plane returned HTTP {r.status_code}"
-            except Exception as exc:
-                detail = f"cannot reach Plane: {str(exc)[:120]}"
+            status, kind, why = await _probe(
+                f"{base.rstrip('/')}/api/v1/workspaces/{slug}/projects/", {"X-API-Key": key})
+            detail = "Plane REST reachable; API key valid" if status == "connected" else f"Plane: {why or kind}"
+    elif row["kind"] == "notion":
+        token = env.get("NOTION_TOKEN")
+        if not token:
+            detail = "set NOTION_TOKEN"
+        else:
+            status, kind, why = await _probe(
+                "https://api.notion.com/v1/users/me",
+                {"Authorization": f"Bearer {token}", "Notion-Version": "2022-06-28"})
+            detail = "Notion API reachable; token valid" if status == "connected" else f"Notion: {why or kind}"
+    elif is_openrouter:
+        key = env.get("OPENROUTER_API_KEY")
+        if not key:
+            detail = "set OPENROUTER_API_KEY"
+        else:
+            status, kind, why = await _probe(
+                "https://openrouter.ai/api/v1/key", {"Authorization": f"Bearer {key}"})
+            detail = "OpenRouter reachable; API key valid" if status == "connected" else f"OpenRouter: {why or kind}"
     else:
         ready = bool(row["endpoint"] or row["command"])
         status = "connected" if ready else "error"
