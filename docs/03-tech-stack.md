@@ -51,9 +51,9 @@
 |---|---|---|
 | Containers | **Docker Compose** | Postgres, Qdrant, Redis, api, worker (message bus = Redis Streams) |
 | Edge / ingress | **Traefik v3** | Reverse proxy + TLS; replaces host nginx. Routes `<svc>.technexus.info` by Docker labels on a shared `web` network |
-| TLS certs | **Let's Encrypt** (HTTP-01) | `.well-known/acme-challenge` on :80; auto-renew |
-| DNS | **Cloudflare** | A records (DNS-only/grey) → Azure VM public IP `4.194.153.78` |
-| Management UI | **Dockge** | Web UI to manage compose stacks (`dockge.technexus.info`) |
+| TLS certs | **Let's Encrypt** (DNS-01 via Cloudflare) | Works behind the CF proxy; auto-renew; no port-80 dependency |
+| DNS | **Cloudflare** (proxied) | A records (orange cloud) → Azure VM `4.194.153.78`; SSL/TLS = Full (Strict) |
+| Management UI | **Dockhand** | Web UI to manage Docker/compose (`dockhand.technexus.info`) |
 | Host | **Azure VM** (Ubuntu 24.04, 4 vCPU/8 GiB) | Coexists with Outline VPN (`shadowbox`) — untouched |
 | Tracing | **Langfuse Cloud** | Self-hosted v3 too heavy (~16 GiB); tracer no-ops until keys set |
 | Backups | encrypted cron | Daily, retained 30 days |

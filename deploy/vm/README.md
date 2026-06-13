@@ -1,7 +1,7 @@
-# VM deploy — Traefik + Dockge + Maria One (Azure VM)
+# VM deploy — Traefik + Dockhand + Maria One (Azure VM)
 
 Single Azure VM (Ubuntu 24.04, 4 vCPU / 8 GiB). **Traefik** is the edge reverse
-proxy (replaces the old host nginx) terminating TLS with Let's Encrypt; **Dockge**
+proxy (replaces the old host nginx) terminating TLS with Let's Encrypt; **Dockhand**
 gives a web UI to manage compose stacks. The app stack runs behind Traefik on a
 shared `web` Docker network.
 
@@ -11,26 +11,30 @@ shared `web` Docker network.
 ## Topology
 
 ```
-Cloudflare DNS (DNS-only / grey cloud)         *.technexus.info -> 4.194.153.78
-        │  :80 / :443
+Cloudflare (proxied / orange cloud)            *.technexus.info -> 4.194.153.78
+        │  :80 / :443  (SSL/TLS mode: Full (Strict))
         ▼
-   Traefik (edge)  ── Let's Encrypt HTTP-01 (.well-known)
+   Traefik (edge)  ── Let's Encrypt DNS-01 via Cloudflare (CF_DNS_API_TOKEN)
         │  docker labels, network: web
-        ├── api.technexus.info     -> maria-one api:8000  (CRM API, /admin, /docs)
-        └── dockge.technexus.info  -> dockge:5001         (compose management)
+        ├── api.technexus.info      -> maria-one api:8000  (CRM API, /admin, /docs)
+        └── dockhand.technexus.info -> dockhand:3000       (Docker management)
    Traefik dashboard -> 127.0.0.1:8080 (SSH tunnel only)
 ```
 
 ## Prerequisites (you control these)
 
-1. **Cloudflare DNS** — A records (DNS only, grey cloud — required for HTTP-01):
+1. **Cloudflare DNS** — A records (proxied / orange cloud) → `4.194.153.78`:
 
-   | Type | Name | Content |
-   |---|---|---|
-   | A | `*.technexus.info` (or `api`, `dockge`) | `4.194.153.78` |
+   | Type | Name | Content | Proxy |
+   |---|---|---|---|
+   | A | `api`, `dockhand` (or `*`) | `4.194.153.78` | Proxied |
 
-2. **Azure NSG** — allow inbound TCP **80** and **443** (443 confirmed open; 80 is
-   required for the ACME HTTP-01 challenge).
+2. **Cloudflare SSL/TLS** — set encryption mode to **Full (Strict)** (origin has a
+   real LE cert). Flexible causes a redirect loop; Full (non-strict) is insecure.
+3. **Cloudflare API token** — scoped `Zone.DNS:Edit` + `Zone:Read` for the DNS-01
+   challenge; put it in `deploy/vm/.env` as `CF_DNS_API_TOKEN`.
+4. **Azure NSG** — allow inbound TCP **80** and **443** (ideally restricted to
+   Cloudflare's IP ranges so the origin can't be reached directly).
 
 ## Deploy
 
@@ -41,7 +45,7 @@ sudo docker network create web                 # once
 git clone https://github.com/ThomasHeinThura/one-assistant.git ~/one-assistant
 cd ~/one-assistant
 
-# edge: Traefik + Dockge
+# edge: Traefik + Dockhand
 cp deploy/vm/.env.example deploy/vm/.env        # set DOMAIN + ACME_EMAIL
 sudo mkdir -p /opt/stacks
 cd deploy/vm && sudo docker compose up -d
@@ -55,13 +59,13 @@ sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --bui
 ## Verify
 
 ```bash
-sudo docker ps                                  # traefik, dockge, api, worker, db, redis, qdrant
+sudo docker ps                                  # traefik, dockhand, api, worker, db, redis, qdrant
 sudo docker logs maria-edge-traefik-1 | grep -i acme   # cert issuance
 curl -s localhost:8000/healthz                  # app liveness (host-bound)
 ```
 
 - App API: `https://api.technexus.info` (+ `/admin`, `/docs` if ENV≠prod)
-- Dockge: `https://dockge.technexus.info` (set an admin password on first load)
+- Dockhand: `https://dockhand.technexus.info` (set an admin password on first load)
 - Traefik dashboard: `ssh -L 8080:127.0.0.1:8080 …` then `http://localhost:8080`
 
 ## Cutover from nginx

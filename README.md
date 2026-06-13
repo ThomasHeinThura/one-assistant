@@ -78,12 +78,12 @@ one-assistant/
 ├── backend/             # FastAPI CRM + AI gateway, workers, Docker Compose
 ├── mobile/              # native iOS app (Swift / SwiftUI) scaffold
 ├── deploy/
-│   ├── vm/              # Traefik + Dockge edge stack for the Azure VM (prod)
+│   ├── vm/              # Traefik + Dockhand edge stack for the Azure VM (prod)
 │   └── azure/           # Azure Container Apps (Bicep) alternative
 └── SECURITY.md          # security baseline (tiers, CVE/CIS, secrets)
 ```
 
-> **Deployed:** Azure VM behind **Traefik** (TLS via Let's Encrypt) with **Dockge**
+> **Deployed:** Azure VM behind **Traefik** (TLS via Let's Encrypt) with **Dockhand**
 > for management; services at `<svc>.technexus.info` via Cloudflare DNS. See
 > [deploy/vm/README.md](deploy/vm/README.md).
 
