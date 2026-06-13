@@ -21,5 +21,8 @@ struct RootTabView: View {
                 MariaChatView().presentationDetents([.medium, .large])
             }
         }
+        .onAppear {
+            if ProcessInfo.processInfo.environment["MARIA_ONDEVICE_SELFTEST"] == "1" { showChat = true }
+        }
     }
 }

@@ -12,6 +12,7 @@ struct MoMReviewView: View {
     @State private var momID: UUID?
     @State private var dispatch: [DispatchTarget] = []
     @State private var working = false
+    @State private var drafting = false
 
     init(visit: Visit, notes: String) {
         self.visit = visit
@@ -40,7 +41,13 @@ struct MoMReviewView: View {
                         .font(.caption).foregroundStyle(.red)
                 }
             }
-            Section("Discussion") { TextEditor(text: $mom.discussion).frame(minHeight: 100) }
+            Section {
+                if drafting {
+                    Label("Drafting minutes on-device…", systemImage: "cpu")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                TextEditor(text: $mom.discussion).frame(minHeight: 100)
+            } header: { Text("Discussion") }
             Section("Decisions") {
                 ForEach(mom.decisions.indices, id: \.self) { i in
                     TextField("Decision", text: $mom.decisions[i])
@@ -71,6 +78,22 @@ struct MoMReviewView: View {
             }
         }
         .navigationTitle("Review MoM")
+        .task { await enhanceOnDevice() }
+    }
+
+    /// Summarise the raw notes into clean minutes using the on-device model.
+    /// Tier-1 confidential drafting NEVER uses the cloud — this runs locally only.
+    private func enhanceOnDevice() async {
+        guard OnDeviceAI.isReady, !notes.isEmpty else { return }
+        drafting = true; defer { drafting = false }
+        let prompt = "Summarise these meeting notes into 2–3 clear sentences of minutes. "
+                   + "Keep it factual.\nAGENDA: \(visit.title)\nNOTES: \(notes)"
+        if let summary = try? await OnDeviceAI.generate(
+                prompt: prompt, instructions: "You write concise, factual meeting minutes."),
+           !summary.isEmpty {
+            mom.discussion = summary
+            mom.drafted_by = "on_device"
+        }
     }
 
     private func confirm() async {
