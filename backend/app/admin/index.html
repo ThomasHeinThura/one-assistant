@@ -142,6 +142,27 @@
     border-radius:10px;padding:12px 14px;margin-top:14px;white-space:pre-wrap;word-break:break-word;display:none}
   .out.show{display:block}
 
+  /* ---------- Auth overlay ---------- */
+  .lock{position:fixed;inset:0;z-index:100;display:none;align-items:center;justify-content:center;
+    background:linear-gradient(180deg,rgba(11,31,58,.72),rgba(11,31,58,.88));backdrop-filter:blur(6px)}
+  .lock.show{display:flex}
+  .lock-card{background:var(--surface);border-radius:18px;box-shadow:0 24px 70px rgba(8,20,40,.45);
+    width:380px;max-width:calc(100vw - 40px);padding:28px 26px;animation:fade .2s ease}
+  .lock-card .lk-logo{width:46px;height:46px;border-radius:12px;margin-bottom:14px;
+    background:radial-gradient(circle at 30% 30%,#9b7ff0,var(--ai));display:flex;align-items:center;
+    justify-content:center;color:#fff;font-size:22px;box-shadow:0 8px 20px rgba(108,76,209,.45)}
+  .lock-card h3{margin:0 0 4px;font-size:18px;letter-spacing:-.3px}
+  .lock-card p{margin:0 0 18px;color:var(--muted);font-size:12.5px}
+  .lock-card label{display:block;font-size:11.5px;font-weight:600;color:var(--muted);margin:0 0 6px}
+  .lock-card input{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:10px;
+    font:inherit;font-size:13px;background:#fff;color:var(--ink)}
+  .lock-card input:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px var(--ring)}
+  .lock-card .lk-btn{width:100%;margin-top:16px;justify-content:center}
+  .lock-card .lk-err{display:none;margin-top:12px;font-size:12px;color:var(--risk);
+    background:var(--risk-bg);border-radius:8px;padding:9px 11px}
+  .lock-card .lk-err.show{display:block}
+  .lock-card .lk-hint{margin-top:14px;font-size:11.5px;color:var(--muted);text-align:center}
+
   @media(max-width:920px){
     :root{--sidebar:0px}
     .shell{grid-template-columns:1fr}
@@ -154,6 +175,21 @@
 </style>
 </head>
 <body>
+<!-- ===================== Auth overlay ===================== -->
+<div class="lock" id="lock">
+  <div class="lock-card">
+    <div class="lk-logo">🔒</div>
+    <h3>Unlock admin console</h3>
+    <p>Enter the backend API token to load live data. It's stored in this browser only.</p>
+    <label for="lockInput">API token</label>
+    <input id="lockInput" type="password" autocomplete="off" spellcheck="false"
+           placeholder="backend .env API_TOKEN" />
+    <div class="lk-err" id="lockErr"></div>
+    <button class="btn primary lk-btn" id="lockBtn">Unlock</button>
+    <div class="lk-hint">Tip: append <code>?token=…</code> to the URL to unlock automatically.</div>
+  </div>
+</div>
+
 <div class="shell">
   <!-- ===================== Sidebar ===================== -->
   <aside class="sidebar">
@@ -456,26 +492,56 @@
     s.innerHTML = '<span class="d"></span>saved'; s.className = 'pill ok';
   };
 
-  // Bearer token for the admin API (blank ok in dev). In prod the console
-  // authenticates via Entra and injects the token here.
-  // Token: localStorage (persisted) ← URL ?token= ← prompt. Sent as Bearer.
+  // Bearer token for the admin API. Stored in localStorage, or read from ?token=.
+  // The auth overlay validates the token against /overview before accepting it,
+  // so a wrong token shows an error instead of silently rendering blank dashes.
   const TKEY = 'maria.adminToken';
   let TOKEN = localStorage.getItem(TKEY) || new URLSearchParams(location.search).get('token') || '';
   if (TOKEN) localStorage.setItem(TKEY, TOKEN);
+  const $lock = document.getElementById('lock');
+  const $lockInput = document.getElementById('lockInput');
+  const $lockErr = document.getElementById('lockErr');
+  const $lockBtn = document.getElementById('lockBtn');
+
   function reflectToken() {
-    document.getElementById('tokenState').textContent = TOKEN ? 'token set' : 'no token';
+    document.getElementById('tokenState').textContent = TOKEN ? 'token set' : 'locked';
     document.getElementById('tokenBtn').className = 'btn sm ' + (TOKEN ? 'ghost' : 'primary');
   }
-  function setToken() {
-    const t = prompt('Paste the API token (backend .env API_TOKEN):', TOKEN || '');
-    if (t == null) return;
-    TOKEN = t.trim(); localStorage.setItem(TKEY, TOKEN); reflectToken(); refreshAll();
+  function showLock(msg) {
+    $lockInput.value = TOKEN || '';
+    $lockErr.classList.toggle('show', !!msg);
+    if (msg) $lockErr.textContent = msg;
+    $lock.classList.add('show');
+    setTimeout(() => $lockInput.focus(), 50);
   }
+  function hideLock() { $lock.classList.remove('show'); $lockErr.classList.remove('show'); }
+
   const api = (path, opts = {}) =>
     fetch('/admin/api' + path, {
       headers: { 'Content-Type': 'application/json', ...(TOKEN ? { Authorization: 'Bearer ' + TOKEN } : {}) },
       ...opts,
     });
+
+  // Validate a candidate token, then unlock + load. Called from the overlay.
+  async function tryUnlock() {
+    const t = $lockInput.value.trim();
+    if (!t) { $lockErr.textContent = 'Enter a token.'; $lockErr.classList.add('show'); return; }
+    $lockBtn.textContent = 'Checking…'; $lockBtn.disabled = true;
+    const prev = TOKEN; TOKEN = t;
+    let ok = false;
+    try { ok = (await api('/overview')).ok; } catch (e) {}
+    $lockBtn.textContent = 'Unlock'; $lockBtn.disabled = false;
+    if (ok) {
+      localStorage.setItem(TKEY, TOKEN); reflectToken(); hideLock(); refreshAll();
+    } else {
+      TOKEN = prev;
+      $lockErr.textContent = 'That token was rejected (401). Check the backend API_TOKEN.';
+      $lockErr.classList.add('show'); $lockInput.select();
+    }
+  }
+  $lockBtn.onclick = tryUnlock;
+  $lockInput.addEventListener('keydown', e => { if (e.key === 'Enter') tryUnlock(); });
+
   function refreshAll() { loadOverview(); loadMcp(); loadSkills(); loadModels(); loadHealth(); }
   const esc = s => (s ?? '').toString().replace(/[<>&]/g, c => ({ '<':'&lt;','>':'&gt;','&':'&amp;' }[c]));
   const tbody = sel => document.querySelector(sel + ' tbody');
@@ -646,10 +712,16 @@
     });
   }
 
-  document.getElementById('tokenBtn').onclick = setToken;
+  document.getElementById('tokenBtn').onclick = () => showLock();
   reflectToken();
-  if (!TOKEN) setTimeout(setToken, 300);   // first visit: prompt for the token
-  refreshAll();
+  // Validate any stored/URL token on load; show the overlay if missing or rejected.
+  (async () => {
+    if (!TOKEN) { showLock(); return; }
+    let ok = false;
+    try { ok = (await api('/overview')).ok; } catch (e) {}
+    if (ok) refreshAll();
+    else showLock('Your saved token was rejected. Enter a valid API token.');
+  })();
 </script>
 </body>
 </html>
