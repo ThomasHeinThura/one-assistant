@@ -6,7 +6,6 @@ Key Vault secret NAME, and the real token is resolved at connect time.
 """
 from __future__ import annotations
 
-import json
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -41,7 +40,7 @@ async def add_mcp(body: MCPIn) -> dict:
             """INSERT INTO mcp_integrations (name, kind, transport, endpoint, auth_ref, enabled, config)
                VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb) RETURNING *""",
             body.name, body.kind, body.transport, body.endpoint, body.auth_ref,
-            body.enabled, json.dumps(body.config),
+            body.enabled, body.config,
         )
     return dict(row)
 
@@ -83,7 +82,7 @@ async def test_mcp(mcp_id: UUID) -> dict:
 
 
 @router.delete("/mcp/{mcp_id}", status_code=204)
-async def delete_mcp(mcp_id: UUID) -> None:
+async def delete_mcp(mcp_id: UUID):
     await pool().execute("DELETE FROM mcp_integrations WHERE id=$1", mcp_id)
 
 
@@ -108,7 +107,7 @@ async def add_skill(body: SkillIn) -> dict:
         row = await conn.fetchrow(
             """INSERT INTO skills (name, description, kind, trigger, enabled, config)
                VALUES ($1,$2,$3,$4,$5,$6::jsonb) RETURNING *""",
-            body.name, body.description, body.kind, body.trigger, body.enabled, json.dumps(body.config),
+            body.name, body.description, body.kind, body.trigger, body.enabled, body.config,
         )
     return dict(row)
 
@@ -141,5 +140,5 @@ async def run_skill(skill_id: UUID, message: str = "ping") -> dict:
 
 
 @router.delete("/skills/{skill_id}", status_code=204)
-async def delete_skill(skill_id: UUID) -> None:
+async def delete_skill(skill_id: UUID):
     await pool().execute("DELETE FROM skills WHERE id=$1", skill_id)

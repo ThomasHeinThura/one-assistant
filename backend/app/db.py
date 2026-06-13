@@ -17,11 +17,20 @@ from .config import get_settings
 _pool: asyncpg.Pool | None = None
 
 
+async def _init_conn(conn: asyncpg.Connection) -> None:
+    # Decode jsonb to Python objects (and encode dicts/lists) so callers get
+    # dict/list, not raw JSON strings. Fixes both worker payloads and API output.
+    await conn.set_type_codec(
+        "jsonb", encoder=json.dumps, decoder=json.loads, schema="pg_catalog"
+    )
+
+
 async def init_pool() -> asyncpg.Pool:
     global _pool
     if _pool is None:
         _pool = await asyncpg.create_pool(
-            get_settings().database_url, min_size=1, max_size=10, command_timeout=30
+            get_settings().database_url, min_size=1, max_size=10, command_timeout=30,
+            init=_init_conn,
         )
     return _pool
 
@@ -68,6 +77,6 @@ async def enqueue_outbox(
         aggregate,
         aggregate_id,
         event,
-        json.dumps(payload or {}),
+        payload or {},        # jsonb codec encodes dict -> json
         idempotency_key,
     )

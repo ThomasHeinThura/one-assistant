@@ -106,13 +106,12 @@ async def upsert_mom(visit_id: UUID, body: MoMIn) -> dict:
     tier = visit["sensitivity_tier"]
     if tier == 1 and body.drafted_by == "cloud":
         raise HTTPException(422, "Tier-1 MoM cannot be drafted in the cloud")
-    import json
     async with tx() as conn:
         mom = await conn.fetchrow(
             """INSERT INTO meeting_minutes
                  (visit_id, attendees, discussion, decisions, next_visit_date, drafted_by, sensitivity_tier)
                VALUES ($1,$2::jsonb,$3,$4::jsonb,$5,$6,$7) RETURNING *""",
-            visit_id, json.dumps(body.attendees), body.discussion, json.dumps(body.decisions),
+            visit_id, body.attendees, body.discussion, body.decisions,
             body.next_visit_date, body.drafted_by, tier,
         )
         for ai in body.action_items:
