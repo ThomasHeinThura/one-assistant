@@ -48,11 +48,9 @@ services:
     <<: *restart
     volumes:
       - qdrantdata:/qdrant/storage
-    healthcheck:
-      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/6333 && echo done"]
-      interval: 10s
-      timeout: 3s
-      retries: 10
+    # No in-container healthcheck: the Qdrant image ships no curl/bash and its
+    # readiness is verified by the API's /readyz over the Docker network instead.
+    # (No service depends_on qdrant being "healthy".)
 
   api:
     build: .
@@ -78,19 +76,10 @@ services:
     cap_drop: ["ALL"]
     security_opt: ["no-new-privileges:true"]
 
-  # Self-hosted Langfuse (tracing). Pinned; uses its own bundled migrations.
-  langfuse:
-    image: langfuse/langfuse:2
-    <<: *restart
-    depends_on:
-      db: { condition: service_healthy }
-    environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-maria}:${POSTGRES_PASSWORD:-maria}@db:5432/${POSTGRES_DB:-maria}
-      NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:-change-me-in-prod}
-      SALT: ${LANGFUSE_SALT:-change-me-in-prod}
-      NEXTAUTH_URL: http://localhost:3000
-    ports:
-      - "127.0.0.1:3000:3000"
+  # Langfuse is NOT run locally. Self-hosted Langfuse v3 needs ClickHouse + worker
+  # + MinIO + Redis (~16 GiB VM) — too heavy to share this box. Use Langfuse Cloud
+  # (set LANGFUSE_* keys in .env; the tracer no-ops until then) or a dedicated VM.
+  # See deploy/azure/README.md.
 
   # ---- Optional Kafka (scale phase only) ----
   # Default bus is Redis Streams; `docker compose up` does NOT start Kafka.

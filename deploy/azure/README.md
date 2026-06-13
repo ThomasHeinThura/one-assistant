@@ -66,9 +66,28 @@ and logged.
 - `worker`: scale 0→5 on Redis list length / outbox `pending` count — drains
   reindex/dispatch backlog under load, idles to zero otherwise.
 
+## Sizing & budget (~4 vCPU / 8 GiB / ~$120/mo)
+
+The MVP app stack fits comfortably in this envelope; idle usage on a dev box is
+~1.1 GiB across all services.
+
+| Component | vCPU | RAM |
+|---|---|---|
+| api (Container Apps) | 0.5 | 1 GiB |
+| worker | 0.25 | 0.5 GiB |
+| Qdrant | 0.5 | 0.5–1 GiB |
+| Managed Postgres (B1ms) | 1 | 2 GiB |
+| Azure Cache for Redis (Basic C0) | shared | 0.25 GiB |
+
+> **Langfuse does NOT fit this budget.** Self-hosted Langfuse **v3** needs
+> ClickHouse + worker + MinIO + Redis — the official guide asks **4 vCPU / 16 GiB /
+> 100 GiB** for that VM *alone*. So at ~$120/mo: use **Langfuse Cloud** (free tier,
+> set `LANGFUSE_*` keys; the tracer no-ops until then), or stand up a **separate**
+> 16 GiB VM later. Do not co-locate it with the app.
+
 ## Hardening (see SECURITY.md)
 
-- Ingress: external on `api` only; `internal` for worker/qdrant/langfuse.
+- Ingress: external on `api` only; `internal` for worker/qdrant.
 - Private endpoints for Postgres + Redis; no public network access.
 - Diagnostic settings → Azure Monitor; alerts on dead-letter growth + Tier-1
   cloud rejections.

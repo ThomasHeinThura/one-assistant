@@ -27,7 +27,9 @@ Then:
 - Ops console (OpenRouter, workload, **MCP integrations**, **skills**): http://localhost:8000/admin
   - Manage MCP servers (Plane/Notion/custom) and agent skills; run the default
     `echo-test` skill to smoke-test the agent/MCP pipeline. API under `/admin/api/*`.
-- Langfuse: http://localhost:3000
+- Tracing (Langfuse): **not run locally** — self-hosted v3 needs ~16 GiB (ClickHouse +
+  worker + MinIO). Use [Langfuse Cloud](https://cloud.langfuse.com) by setting
+  `LANGFUSE_*` keys in `.env` (the tracer no-ops until then), or a dedicated VM.
 
 Migrations in `migrations/` run automatically on first DB init (`001_init.sql`
 creates the schema; `002_seed.sql` adds optional dev data — M0 "seedable").
