@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Maria One</title>
+<style>
+  :root {
+    --navy-900: #0f2747;
+    --navy-700: #1e3a5f;
+    --navy-500: #2f5d8f;
+    --navy-300: #6f93bd;
+    --navy-50:  #eef3f9;
+    --navy-100: #dde7f3;
+    --bg: #f4f7fb;
+    --card: #ffffff;
+    --ink: #15233a;
+    --muted: #6b7a90;
+    --line: #e4ebf3;
+    --ok: #1f9d6b; --ok-bg: #e4f6ee;
+    --warn: #c9810a; --warn-bg: #fdf3e0;
+    --risk: #d24545; --risk-bg: #fceaea;
+    --ai: #6c4cd1; --ai-bg: #efeafb;
+    --shadow: 0 1px 2px rgba(15,39,71,0.06), 0 6px 20px rgba(15,39,71,0.06);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, system-ui, sans-serif;
+    background: var(--bg); color: var(--ink); line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+  }
+  .app {
+    max-width: 440px; margin: 16px auto; background: var(--bg);
+    border-radius: 28px; overflow: hidden; position: relative;
+    box-shadow: 0 20px 60px rgba(15,39,71,0.18);
+    border: 1px solid var(--line);
+    height: 880px; max-height: calc(100vh - 32px);
+    display: flex; flex-direction: column;
+  }
+
+  /* Header */
+  .top {
+    background: linear-gradient(155deg, var(--navy-700), var(--navy-900));
+    color: #fff; padding: 20px 20px 18px; position: relative; flex: none;
+  }
+  .top .row { display: flex; align-items: center; justify-content: space-between; }
+  .brand { font-size: 12px; letter-spacing: 2px; text-transform: uppercase; color: var(--navy-300); }
+  .top h1 { margin: 4px 0 0; font-size: 23px; font-weight: 700; letter-spacing: -0.3px; }
+  .top .sub { color: #c6d6ea; font-size: 13px; margin-top: 2px; }
+  .avatar { width: 38px; height: 38px; border-radius: 50%; background: var(--navy-500); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; }
+
+  /* Body (scroll area) */
+  .body { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; position: relative; }
+  .screen { display: none; padding: 16px 16px 24px; }
+  .screen.active { display: block; }
+  .eyebrow { font-size: 12px; font-weight: 600; letter-spacing: 0.4px; text-transform: uppercase; color: var(--muted); margin: 18px 4px 10px; }
+  .eyebrow:first-child { margin-top: 4px; }
+
+  /* Cards */
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); padding: 14px; margin-bottom: 12px; }
+  .card.tap { cursor: pointer; transition: transform .08s ease; }
+  .card.tap:active { transform: scale(.99); }
+
+  /* Stat row */
+  .stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: 4px; }
+  .stat { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px; box-shadow: var(--shadow); }
+  .stat .n { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
+  .stat .l { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
+  .stat .n.risk { color: var(--risk); } .stat .n.ok { color: var(--ok); }
+  .stat .n.warn2 { color: var(--warn); }
+
+  /* AI brief */
+  .ai-brief { background: linear-gradient(160deg, #faf8ff, #f1ecfb); border: 1px solid var(--navy-100); border-radius: 16px; padding: 15px; margin-bottom: 14px; box-shadow: var(--shadow); }
+  .ai-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .ai-orb { width: 26px; height: 26px; border-radius: 50%; background: radial-gradient(circle at 30% 30%, #9b7ff0, var(--ai)); box-shadow: 0 0 0 4px var(--ai-bg); }
+  .ai-head .name { font-weight: 700; font-size: 14px; }
+  .ai-head .tag { font-size: 10.5px; color: var(--ai); background: var(--ai-bg); padding: 2px 8px; border-radius: 999px; font-weight: 600; }
+  .ai-brief p { margin: 0; font-size: 13.5px; color: #2c3a52; }
+
+  /* Suggestion chip cards */
+  .sugg { display: flex; gap: 10px; align-items: flex-start; padding: 11px 12px; border: 1px dashed var(--navy-100); background: #fbfcfe; border-radius: 12px; margin-top: 8px; }
+  .sugg .i { width: 24px; height: 24px; border-radius: 7px; background: var(--ai-bg); color: var(--ai); display: flex; align-items: center; justify-content: center; font-size: 13px; flex: none; }
+  .sugg .t { font-size: 13px; }
+  .sugg .t b { font-weight: 600; }
+  .sugg .act { margin-left: auto; font-size: 12px; font-weight: 600; color: var(--navy-500); white-space: nowrap; align-self: center; }
+
+  /* Todo list */
+  .todo { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .todo:last-child { border-bottom: 0; }
+  .box { width: 20px; height: 20px; border-radius: 6px; border: 2px solid var(--navy-300); flex: none; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 12px; }
+  .box.on { background: var(--navy-500); border-color: var(--navy-500); }
+  .todo .tx { font-size: 14px; }
+  .todo .tx.done { color: var(--muted); text-decoration: line-through; }
+  .todo .meta { font-size: 11.5px; color: var(--muted); }
+  .chip { font-size: 10.5px; padding: 2px 8px; border-radius: 999px; font-weight: 600; margin-left: auto; white-space: nowrap; }
+  .c-risk { background: var(--risk-bg); color: var(--risk); }
+  .c-warn { background: var(--warn-bg); color: var(--warn); }
+  .c-ok { background: var(--ok-bg); color: var(--ok); }
+  .c-ai { background: var(--ai-bg); color: var(--ai); }
+
+  /* List item */
+  .li { display: flex; align-items: center; gap: 12px; }
+  .li .ic { width: 40px; height: 40px; border-radius: 12px; background: var(--navy-50); color: var(--navy-700); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px; flex: none; }
+  .li .main { flex: 1; min-width: 0; }
+  .li .ttl { font-size: 15px; font-weight: 600; }
+  .li .desc { font-size: 12.5px; color: var(--muted); }
+  .li .right { text-align: right; font-size: 12px; color: var(--muted); white-space: nowrap; }
+
+  /* Pipeline bar */
+  .bar { height: 7px; border-radius: 999px; background: var(--navy-50); overflow: hidden; margin-top: 9px; }
+  .bar > i { display: block; height: 100%; border-radius: 999px; }
+  .health { font-size: 11.5px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px; }
+  .health .d { width: 7px; height: 7px; border-radius: 50%; }
+
+  .sectionhead { display: flex; align-items: center; justify-content: space-between; margin: 18px 4px 10px; }
+  .sectionhead .eyebrow { margin: 0; }
+  .add { font-size: 12.5px; font-weight: 600; color: var(--navy-500); background: var(--navy-50); border: 0; padding: 6px 12px; border-radius: 999px; cursor: pointer; }
+
+  /* Tabs */
+  .tabbar { flex: none; display: flex; background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); border-top: 1px solid var(--line); padding: 8px 6px calc(8px + env(safe-area-inset-bottom)); }
+  .tabbar button { flex: 1; border: 0; background: none; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--muted); font-size: 10.5px; font-weight: 600; padding: 4px 0; }
+  .tabbar button .ti { width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; font-size: 17px; }
+  .tabbar button.active { color: var(--navy-700); }
+
+  /* AI floating button + sheet */
+  .fab { position: absolute; right: 16px; bottom: 80px; width: 54px; height: 54px; border-radius: 50%; border: 0; cursor: pointer; background: radial-gradient(circle at 30% 30%, #9b7ff0, var(--ai)); box-shadow: 0 10px 24px rgba(108,76,209,0.45); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 22px; z-index: 15; }
+  .sheet-wrap { position: absolute; inset: 0; display: none; z-index: 20; }
+  .sheet-wrap.open { display: block; }
+  .scrim { position: absolute; inset: 0; background: rgba(15,39,71,0.4); }
+  .sheet { position: absolute; left: 0; right: 0; bottom: 0; background: var(--card); border-radius: 22px 22px 0 0; padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); max-height: 78%; display: flex; flex-direction: column; }
+  .sheet h3 { margin: 4px 0 2px; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+  .sheet .hint { font-size: 12px; color: var(--muted); margin: 0 0 12px; }
+  .msgs { overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 4px 2px; }
+  .bub { max-width: 84%; padding: 10px 13px; border-radius: 14px; font-size: 13.5px; }
+  .bub.ai { background: var(--navy-50); color: var(--ink); align-self: flex-start; border-bottom-left-radius: 4px; }
+  .bub.me { background: var(--navy-700); color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; }
+  .qchips { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0 8px; }
+  .qchips button { font-size: 12px; border: 1px solid var(--line); background: #fff; color: var(--navy-700); padding: 8px 11px; border-radius: 999px; cursor: pointer; }
+  .composer { display: flex; gap: 8px; margin-top: 10px; }
+  .composer input { flex: 1; border: 1px solid var(--line); border-radius: 12px; padding: 11px 13px; font: inherit; font-size: 14px; }
+  .composer button { border: 0; background: var(--navy-700); color: #fff; border-radius: 12px; padding: 0 16px; font-weight: 600; cursor: pointer; }
+  .reindex { font-size: 11px; color: var(--ok); display: inline-flex; align-items: center; gap: 5px; margin-top: 8px; }
+  .reindex .d { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); animation: pulse 1.8s infinite; }
+  @keyframes pulse { 0%,100%{opacity:.4} 50%{opacity:1} }
+
+  /* Deal lifecycle stage strip (horizontal scroll) */
+  .stages { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 8px; -webkit-overflow-scrolling: touch; }
+  .stages::-webkit-scrollbar { height: 0; }
+  .stage { flex: none; min-width: 92px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px; box-shadow: var(--shadow); }
+  .stage .s-n { font-size: 18px; font-weight: 700; letter-spacing: -0.5px; }
+  .stage .s-l { font-size: 11px; color: var(--muted); margin-top: 1px; }
+  .stage.cur { border-color: var(--navy-500); background: var(--navy-50); }
+  .stage .s-step { font-size: 9.5px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: var(--navy-300); }
+
+  /* Realtime banner */
+  .live { display: flex; align-items: center; gap: 8px; background: var(--ai-bg); border: 1px solid #e0d6f7; border-radius: 12px; padding: 10px 12px; margin-bottom: 12px; font-size: 12.5px; color: #3a2c63; }
+  .live .live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ai); animation: pulse 1.4s infinite; flex: none; }
+  .live b { font-weight: 700; }
+  .orch { font-size: 11px; color: var(--ai); background: var(--ai-bg); padding: 2px 8px; border-radius: 999px; font-weight: 600; }
+
+  /* Login */
+  .login { position: absolute; inset: 0; z-index: 40; background: linear-gradient(165deg, var(--navy-700), var(--navy-900)); color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px; text-align: center; transition: opacity .4s ease, transform .4s ease; }
+  .login.hide { opacity: 0; transform: scale(1.04); pointer-events: none; }
+  .login .mark { width: 72px; height: 72px; border-radius: 22px; background: radial-gradient(circle at 30% 30%, #9b7ff0, var(--ai)); display: flex; align-items: center; justify-content: center; font-size: 34px; box-shadow: 0 12px 30px rgba(108,76,209,0.5); margin-bottom: 18px; }
+  .login h2 { margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.4px; }
+  .login .by { color: #b9cae2; font-size: 13px; margin-top: 4px; }
+  .login .spacer { height: 40px; }
+  .faceid { width: 64px; height: 64px; border-radius: 16px; border: 2px solid #7fa8d8; color: #cfe0f5; display: flex; align-items: center; justify-content: center; font-size: 30px; background: rgba(255,255,255,0.06); cursor: pointer; transition: transform .2s, border-color .2s, color .2s; }
+  .faceid:active { transform: scale(.94); }
+  .faceid.scan { border-color: var(--ok); color: var(--ok); animation: scan 1s ease; }
+  @keyframes scan { 0%,100%{box-shadow:0 0 0 0 rgba(31,157,107,0)} 50%{box-shadow:0 0 0 10px rgba(31,157,107,0.25)} }
+  .login .hint2 { color: #9fb4d2; font-size: 12.5px; margin-top: 12px; }
+  .login .pwd { color: #cfe0f5; font-size: 13px; margin-top: 22px; opacity: .85; cursor: pointer; text-decoration: underline; }
+
+  /* Editor sheet (todo / outcome) */
+  .ed-wrap { position: absolute; inset: 0; display: none; z-index: 25; }
+  .ed-wrap.open { display: block; }
+  .ed-sheet { position: absolute; left: 0; right: 0; bottom: 0; background: var(--card); border-radius: 22px 22px 0 0; padding: 16px 16px calc(18px + env(safe-area-inset-bottom)); max-height: 88%; overflow-y: auto; }
+  .ed-grab { width: 40px; height: 4px; border-radius: 999px; background: var(--line); margin: 0 auto 12px; }
+  /* swipe-to-dismiss grab area + drag */
+  .ed-grab { position: relative; cursor: grab; touch-action: none; }
+  .ed-grab::before { content: ""; position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); width: 120px; height: 30px; }
+  .ed-sheet, .sheet { will-change: transform; touch-action: pan-y; }
+  .ed-sheet.dragging, .sheet.dragging { transition: none; }
+  .ed-sheet:not(.dragging), .sheet:not(.dragging) { transition: transform .28s cubic-bezier(.22,.61,.36,1); }
+  .ed-sheet h3 { margin: 0 0 2px; font-size: 18px; }
+  .ed-sheet .sub2 { font-size: 12.5px; color: var(--muted); margin: 0 0 14px; }
+  .lbl { font-size: 11.5px; font-weight: 600; letter-spacing: 0.3px; text-transform: uppercase; color: var(--muted); margin: 14px 2px 6px; }
+  .field-in, .field-ta, .field-sel { width: 100%; border: 1px solid var(--line); border-radius: 11px; padding: 11px 13px; font: inherit; font-size: 14px; background: #fff; color: var(--ink); }
+  .field-ta { min-height: 72px; resize: vertical; }
+  .seg2 { display: flex; gap: 6px; background: var(--navy-50); border-radius: 11px; padding: 4px; }
+  .seg2 button { flex: 1; border: 0; background: transparent; padding: 9px 4px; border-radius: 8px; font: inherit; font-size: 12.5px; color: var(--navy-500); cursor: pointer; font-weight: 600; }
+  .seg2 button.on { background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(15,39,71,0.12); }
+  .ai-row { display: flex; gap: 8px; align-items: flex-start; background: var(--ai-bg); border-radius: 11px; padding: 10px 12px; margin-top: 14px; font-size: 12.5px; color: #3a2c63; }
+  .ai-row .i { color: var(--ai); }
+  .ed-actions { display: flex; gap: 10px; margin-top: 16px; }
+  .ed-actions button { flex: 1; border: 0; border-radius: 12px; padding: 13px; font: inherit; font-size: 14.5px; font-weight: 600; cursor: pointer; }
+  .b-sub { background: var(--navy-700); color: #fff; }
+  .b-ai { background: var(--ai); color: #fff; }
+  .ai-items { margin: 8px 0 0; padding: 0; list-style: none; }
+  .ai-items li { display: flex; gap: 8px; align-items: center; font-size: 13px; padding: 7px 0; border-bottom: 1px solid var(--line); }
+  .ai-items li:last-child { border-bottom: 0; }
+  .ai-items .who2 { margin-left: auto; font-size: 11px; color: var(--muted); }
+
+  /* Toast / coordination */
+  .toast { position: absolute; left: 16px; right: 16px; bottom: 84px; z-index: 30; background: var(--navy-900); color: #fff; border-radius: 14px; padding: 13px 15px; font-size: 13px; box-shadow: 0 12px 30px rgba(15,39,71,0.35); display: flex; gap: 10px; align-items: flex-start; opacity: 0; transform: translateY(12px); transition: all .3s ease; pointer-events: none; }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast .orb2 { width: 22px; height: 22px; border-radius: 50%; background: radial-gradient(circle at 30% 30%, #9b7ff0, var(--ai)); flex: none; margin-top: 1px; }
+  .toast b { font-weight: 700; }
+
+  /* Funnel (CRM) */
+  .funnel { background: var(--card); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); padding: 6px 10px; margin-bottom: 12px; }
+  .frow { display: flex; align-items: center; gap: 10px; padding: 9px 2px; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .frow:last-child { border-bottom: 0; }
+  .frow .fstep { width: 18px; height: 18px; border-radius: 6px; background: var(--navy-50); color: var(--navy-700); font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex: none; }
+  .frow .fname { font-size: 13.5px; font-weight: 600; min-width: 84px; }
+  .fbar { flex: 1; height: 18px; background: var(--navy-50); border-radius: 6px; overflow: hidden; position: relative; }
+  .fbar > i { display: block; height: 100%; background: linear-gradient(90deg, var(--navy-500), var(--navy-300)); border-radius: 6px; }
+  .frow .fcount { font-size: 12.5px; font-weight: 700; min-width: 22px; text-align: right; }
+  .frow .fval { font-size: 11px; color: var(--muted); min-width: 52px; text-align: right; }
+  .frow.won .fbar > i { background: linear-gradient(90deg, var(--ok), #7fd8b3); }
+  .frow.lost .fbar > i { background: linear-gradient(90deg, var(--risk), #f0a0a0); }
+
+  /* Management: prominent button */
+  .btn-new { width: 100%; border: 0; border-radius: 13px; padding: 13px; font: inherit; font-size: 14.5px; font-weight: 700; cursor: pointer; background: var(--navy-700); color: #fff; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 6px 16px rgba(15,39,71,0.18); margin-bottom: 14px; }
+  .btn-new:active { transform: scale(.99); }
+
+  /* Project rows (manager view) */
+  .prow { display: flex; align-items: center; gap: 11px; padding: 12px 0; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .prow:last-child { border-bottom: 0; }
+  .prow .pico { width: 38px; height: 38px; border-radius: 11px; background: var(--navy-50); color: var(--navy-700); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; flex: none; }
+  .prow .pmain { flex: 1; min-width: 0; }
+  .prow .pname { font-size: 14.5px; font-weight: 600; }
+  .prow .pmeta { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
+  .prow .pmini { height: 6px; border-radius: 999px; background: var(--navy-50); overflow: hidden; margin-top: 6px; display: flex; }
+  .prow .pmini > i { height: 100%; display: block; }
+  .prow .pcount { text-align: right; flex: none; }
+  .prow .pcount .big { font-size: 17px; font-weight: 700; }
+  .prow .pcount .small2 { font-size: 10.5px; color: var(--muted); }
+
+  /* Team workload */
+  .trow { display: flex; align-items: center; gap: 11px; padding: 11px 0; border-bottom: 1px solid var(--line); }
+  .trow:last-child { border-bottom: 0; }
+  .trow .tav { width: 34px; height: 34px; border-radius: 50%; background: var(--navy-500); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; flex: none; }
+  .trow .tmain { flex: 1; min-width: 0; }
+  .trow .tname { font-size: 14px; font-weight: 600; }
+  .trow .tmini { height: 7px; border-radius: 999px; background: var(--navy-50); overflow: hidden; margin-top: 5px; }
+  .trow .tmini > i { height: 100%; display: block; border-radius: 999px; }
+  .trow .tnum { font-size: 13px; font-weight: 700; flex: none; min-width: 58px; text-align: right; }
+  .load-pill { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 999px; }
+  .lp-ok { background: var(--ok-bg); color: var(--ok); }
+  .lp-warn { background: var(--warn-bg); color: var(--warn); }
+  .lp-over { background: var(--risk-bg); color: var(--risk); }
+
+  /* Filter chips */
+  .filters { display: flex; gap: 7px; overflow-x: auto; padding: 2px 2px 10px; -webkit-overflow-scrolling: touch; }
+  .filters::-webkit-scrollbar { height: 0; }
+  .fchip { flex: none; border: 1px solid var(--line); background: #fff; color: var(--navy-700); font: inherit; font-size: 12.5px; font-weight: 600; padding: 7px 13px; border-radius: 999px; cursor: pointer; }
+  .fchip.on { background: var(--navy-700); color: #fff; border-color: var(--navy-700); }
+  .fchip.lost.on { background: var(--risk); border-color: var(--risk); }
+  .fchip.won.on { background: var(--ok); border-color: var(--ok); }
+</style>
+</head>
+<body>
+  <div class="app">
+    <!-- Login (Face ID) -->
+    <div class="login" id="login">
+      <div class="mark">✦</div>
+      <h2>Maria One</h2>
+      <div class="by">Your sales & solution copilot</div>
+      <div class="spacer"></div>
+      <button class="faceid" id="faceid" title="Sign in with Face ID">𝅓</button>
+      <div class="hint2" id="loginHint">Tap to sign in with Face ID</div>
+      <div class="pwd">Use passcode instead</div>
+    </div>
+
+    <!-- Header -->
+    <div class="top">
+      <div class="row">
+        <div>
+          <div class="brand">Maria One</div>
+          <h1 id="hTitle">Today</h1>
+          <div class="sub" id="hSub">Wed 13 Jun · Maria has 4 things for you</div>
+        </div>
+        <div class="avatar">HT</div>
+      </div>
+    </div>
+
+    <!-- TODAY -->
+    <div class="body">
+    <section class="screen active" id="s-today">
+      <div class="live"><span class="live-dot"></span><span><b>Live:</b> 2 deals advanced · 1 SOW awaiting sign-off · Maria is following up on 3 items.</span></div>
+
+      <div class="ai-brief">
+        <div class="ai-head"><span class="ai-orb"></span><span class="name">Maria</span><span class="tag">Daily brief</span><span class="orch">orchestrating</span></div>
+        <p>3 visits today. <b>Thai Bank SLA</b> opportunity looks <b style="color:var(--risk)">at-risk</b> (no activity 21d). 2 Managed-Service tickets need triage. I drafted follow-ups for your 09:30 visit, and a sub-agent is preparing the Vietnam Finance quotation.</p>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="n">3</div><div class="l">Visits today</div></div>
+        <div class="stat"><div class="n risk">2</div><div class="l">Tickets to action</div></div>
+        <div class="stat"><div class="n ok">5</div><div class="l">Healthy deals</div></div>
+      </div>
+
+      <div class="eyebrow">My to-do · AI-prioritised</div>
+      <div class="card">
+        <div class="todo">
+          <span class="box" onclick="event.stopPropagation();this.classList.toggle('on');this.textContent=this.classList.contains('on')?'✓':'';this.parentElement.querySelector('.tx').classList.toggle('done')"></span>
+          <span class="tgo" data-edit="todo" data-title="Send premium-support pricing — Thai Bank" data-meta="From this morning's MoM"><span class="tx">Send premium-support pricing — Thai Bank</span><br><span class="meta">From this morning's MoM</span></span>
+          <span class="chip c-risk">At-risk deal</span>
+        </div>
+        <div class="todo">
+          <span class="box" onclick="event.stopPropagation();this.classList.toggle('on');this.textContent=this.classList.contains('on')?'✓':'';this.parentElement.querySelector('.tx').classList.toggle('done')"></span>
+          <span class="tgo" data-edit="todo" data-title="Triage MS ticket BIM-1041 (DB latency)" data-meta="Unassigned · 2d open"><span class="tx">Triage MS ticket BIM-1041 (DB latency)</span><br><span class="meta">Unassigned · 2d open</span></span>
+          <span class="chip c-warn">Needs action</span>
+        </div>
+        <div class="todo">
+          <span class="box" onclick="event.stopPropagation();this.classList.toggle('on');this.textContent=this.classList.contains('on')?'✓':'';this.parentElement.querySelector('.tx').classList.toggle('done')"></span>
+          <span class="tgo" data-edit="todo" data-title="Confirm Vietnam Finance kickoff agenda" data-meta="Visit at 13:00"><span class="tx">Confirm Vietnam Finance kickoff agenda</span><br><span class="meta">Visit at 13:00</span></span>
+          <span class="chip c-ai">Maria drafted</span>
+        </div>
+        <div class="todo">
+          <span class="box" onclick="event.stopPropagation();this.classList.toggle('on');this.textContent=this.classList.contains('on')?'✓':'';this.parentElement.querySelector('.tx').classList.toggle('done')"></span>
+          <span class="tgo" data-edit="todo" data-title="Raise RFI for Myanmar Banking solution review" data-meta="Suggested workflow step"><span class="tx">Raise RFI for Myanmar Banking solution review</span><br><span class="meta">Suggested workflow step</span></span>
+          <span class="chip c-ai">Suggestion</span>
+        </div>
+      </div>
+
+      <div class="sugg">
+        <span class="i">✦</span>
+        <span class="t"><b>Maria:</b> Thai Bank had no touch in 21 days. Log a check-in call or I can draft a nudge email.</span>
+        <span class="act">Act ›</span>
+      </div>
+    </section>
+
+    <!-- VISITPLAN -->
+    <section class="screen" id="s-visit">
+      <div class="sectionhead"><div class="eyebrow">Today's visits</div><button class="add" data-edit="planvisit" data-title="Plan visit" data-meta="New client visit">+ Plan visit</button></div>
+
+      <div class="card tap" data-edit="visit" data-title="Thai Bank" data-meta="SLA renewal · K. Somchai · 09:30">
+        <div class="li">
+          <span class="ic">TB</span>
+          <span class="main"><span class="ttl">Thai Bank</span><br><span class="desc">SLA renewal · K. Somchai</span></span>
+          <span class="right">09:30<br><span class="chip c-warn">In progress</span></span>
+        </div>
+        <div class="sugg"><span class="i">✦</span><span class="t"><b>Workflow:</b> Visit → <b>MoM</b> → link to pipeline → raise <b>RFI</b> → follow-up ticket.</span><span class="act">Run ›</span></div>
+      </div>
+
+      <div class="card tap" data-edit="visit" data-title="Vietnam Finance" data-meta="Kickoff · Ms. Linh · 13:00">
+        <div class="li">
+          <span class="ic">VF</span>
+          <span class="main"><span class="ttl">Vietnam Finance</span><br><span class="desc">Kickoff · Ms. Linh</span></span>
+          <span class="right">13:00<br><span class="chip c-ok">Scheduled</span></span>
+        </div>
+        <div class="sugg"><span class="i">✦</span><span class="t"><b>Maria:</b> agenda drafted from last 2 MoMs. Tap to review.</span><span class="act">Review ›</span></div>
+      </div>
+
+      <div class="card tap" data-edit="visit" data-title="Myanmar Banking" data-meta="Solution review · U Aung · 15:30">
+        <div class="li">
+          <span class="ic">MB</span>
+          <span class="main"><span class="ttl">Myanmar Banking</span><br><span class="desc">Solution review · U Aung</span></span>
+          <span class="right">15:30<br><span class="chip c-ok">Scheduled</span></span>
+        </div>
+      </div>
+
+      <div class="eyebrow">Per-visit SOP</div>
+      <div class="card" style="font-size:13px;color:#34465f">
+        Check-in (GPS) → agenda → notes → <b>AI MoM</b> → status update → dispatch (CRM · Plane · Notion).
+      </div>
+    </section>
+
+    <!-- CRM -->
+    <section class="screen" id="s-crm">
+      <div class="live"><span class="live-dot"></span><span><b>Live:</b> Maria moved Vietnam Finance to <b>Proposal</b> and queued a quotation task.</span></div>
+
+      <div class="stats">
+        <div class="stat"><div class="n">$3.4M</div><div class="l">Open pipeline</div></div>
+        <div class="stat"><div class="n">23</div><div class="l">Active deals</div></div>
+        <div class="stat"><div class="n risk">3</div><div class="l">At-risk</div></div>
+      </div>
+
+      <div class="sectionhead"><div class="eyebrow">Pipeline funnel · count & value</div><span class="orch">live</span></div>
+      <div class="funnel">
+        <div class="frow"><span class="fstep">1</span><span class="fname">Lead</span><span class="fbar"><i style="width:100%"></i></span><span class="fcount">31</span><span class="fval">$5.1M</span></div>
+        <div class="frow"><span class="fstep">2</span><span class="fname">Visit</span><span class="fbar"><i style="width:74%"></i></span><span class="fcount">23</span><span class="fval">$4.2M</span></div>
+        <div class="frow"><span class="fstep">3</span><span class="fname">Pipeline</span><span class="fbar"><i style="width:55%"></i></span><span class="fcount">17</span><span class="fval">$3.4M</span></div>
+        <div class="frow"><span class="fstep">4</span><span class="fname">Proposal</span><span class="fbar"><i style="width:35%"></i></span><span class="fcount">11</span><span class="fval">$2.3M</span></div>
+        <div class="frow"><span class="fstep">5</span><span class="fname">Quote</span><span class="fbar"><i style="width:23%"></i></span><span class="fcount">7</span><span class="fval">$1.6M</span></div>
+        <div class="frow"><span class="fstep">6</span><span class="fname">Contract</span><span class="fbar"><i style="width:13%"></i></span><span class="fcount">4</span><span class="fval">$980k</span></div>
+        <div class="frow won"><span class="fstep">7</span><span class="fname">Won (QTD)</span><span class="fbar"><i style="width:30%"></i></span><span class="fcount">9</span><span class="fval">$2.1M</span></div>
+        <div class="frow lost"><span class="fstep">✕</span><span class="fname">Lost (QTD)</span><span class="fbar"><i style="width:16%"></i></span><span class="fcount">5</span><span class="fval">$640k</span></div>
+      </div>
+      <div class="sugg"><span class="i">✦</span><span class="t"><b>Maria:</b> conversion Proposal→Won is 41% (above target). 6 deals stuck &gt;30d at Quote — want a chase plan?</span><span class="act">Plan ›</span></div>
+
+      <div class="sectionhead"><div class="eyebrow">Opportunities · AI health</div><button class="add" data-edit="adddeal" data-title="Add deal" data-meta="New opportunity">+ Add deal</button></div>
+
+      <div class="filters" id="dealFilters">
+        <button class="fchip on" data-filter="all">All · 23</button>
+        <button class="fchip" data-filter="open">Open · 17</button>
+        <button class="fchip" data-filter="risk">At-risk · 3</button>
+        <button class="fchip won" data-filter="won">Won · 9</button>
+        <button class="fchip lost" data-filter="lost">Lost · 5</button>
+      </div>
+
+      <div class="card" data-edit="deal" data-title="Thai Bank — SLA renewal" data-meta="$420k · Pipeline · Q3">
+        <div class="li"><span class="main"><span class="ttl">Thai Bank — SLA renewal</span><br><span class="desc">$420k · Pipeline · Q3</span></span>
+          <span class="health" style="color:var(--risk)"><span class="d" style="background:var(--risk)"></span>At-risk</span></div>
+        <div class="bar"><i style="width:38%;background:var(--risk)"></i></div>
+        <div class="sugg"><span class="i">✦</span><span class="t">No activity 21d · legal review pending. Maria suggests a check-in.</span><span class="act">Act ›</span></div>
+      </div>
+
+      <div class="card" data-edit="deal" data-title="Vietnam Finance — Core platform" data-meta="$650k · Proposal · Q3">
+        <div class="li"><span class="main"><span class="ttl">Vietnam Finance — Core platform</span><br><span class="desc">$650k · Proposal · Q3</span></span>
+          <span class="health" style="color:var(--ok)"><span class="d" style="background:var(--ok)"></span>Healthy</span></div>
+        <div class="bar"><i style="width:55%;background:var(--ok)"></i></div>
+      </div>
+
+      <div class="card" data-edit="deal" data-title="Myanmar Banking — Managed Svc" data-meta="$300k · Quote · Q4">
+        <div class="li"><span class="main"><span class="ttl">Myanmar Banking — Managed Svc</span><br><span class="desc">$300k · Quote · Q4</span></span>
+          <span class="health" style="color:var(--warn)"><span class="d" style="background:var(--warn)"></span>Watch</span></div>
+        <div class="bar"><i style="width:62%;background:var(--warn)"></i></div>
+      </div>
+
+      <div class="card" data-edit="deal" data-title="KBZ — Core banking upgrade" data-meta="$1.1M · Contract · Q3">
+        <div class="li"><span class="main"><span class="ttl">KBZ — Core banking upgrade</span><br><span class="desc">$1.1M · Contract · Q3</span></span>
+          <span class="health" style="color:var(--ok)"><span class="d" style="background:var(--ok)"></span>Healthy</span></div>
+        <div class="bar"><i style="width:82%;background:var(--ok)"></i></div>
+      </div>
+
+      <div class="card" data-edit="deal" data-title="AYA Bank — DR site" data-meta="$540k · Pipeline · Q4">
+        <div class="li"><span class="main"><span class="ttl">AYA Bank — DR site</span><br><span class="desc">$540k · Pipeline · Q4</span></span>
+          <span class="health" style="color:var(--risk)"><span class="d" style="background:var(--risk)"></span>At-risk</span></div>
+        <div class="bar"><i style="width:28%;background:var(--risk)"></i></div>
+      </div>
+
+      <div class="card" data-edit="deal" data-title="CB Bank — Card switch" data-meta="$780k · Won · Q2">
+        <div class="li"><span class="main"><span class="ttl">CB Bank — Card switch</span><br><span class="desc">$780k · Won · → Project</span></span>
+          <span class="health" style="color:var(--ok)"><span class="d" style="background:var(--ok)"></span>Won</span></div>
+        <div class="bar"><i style="width:100%;background:var(--ok)"></i></div>
+      </div>
+
+      <div class="card" data-edit="deal" data-title="UAB — Mobile wallet" data-meta="$460k · Lost · Q2">
+        <div class="li"><span class="main"><span class="ttl">UAB — Mobile wallet</span><br><span class="desc">$460k · Lost · price · kept for reference</span></span>
+          <span class="health" style="color:var(--risk)"><span class="d" style="background:var(--risk)"></span>Lost</span></div>
+        <div class="bar"><i style="width:100%;background:var(--risk)"></i></div>
+        <div class="sugg"><span class="i">✦</span><span class="t"><b>Maria:</b> lost on price to a local vendor. Re-approach at renewal (Q4 next year)?</span><span class="act">Remind ›</span></div>
+      </div>
+    </section>
+
+    <!-- TICKETS (management overview) -->
+    <section class="screen" id="s-tickets">
+      <div class="live"><span class="live-dot"></span><span><b>Live:</b> Su closed BIM-1038 · 2 tickets breaching SLA in &lt;4h · Maria triaged 1 overnight.</span></div>
+
+      <button class="btn-new" data-edit="ticket" data-title="New ticket" data-meta="Plane · Managed Service / Project / CR">＋ New ticket</button>
+
+      <div class="ai-brief">
+        <div class="ai-head"><span class="ai-orb"></span><span class="name">Maria</span><span class="tag">Management summary</span></div>
+        <p>18 open across <b>6 projects</b> &amp; 5 clients. <b style="color:var(--risk)">2 unassigned</b>, <b style="color:var(--warn)">3 at SLA risk</b>. Team throughput: 11 closed / 9 opened this week. <b>Aung is overloaded</b> (7 open); Linn has capacity. Avg resolution 1.8d.</p>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="n">18</div><div class="l">Open</div></div>
+        <div class="stat"><div class="n warn2">3</div><div class="l">SLA risk</div></div>
+        <div class="stat"><div class="n">1.8d</div><div class="l">Avg resolve</div></div>
+      </div>
+
+      <div class="sectionhead"><div class="eyebrow">By project · who owns the load</div><span class="orch">live</span></div>
+      <div class="card">
+        <div class="prow" data-edit="ticket" data-title="Thai Bank — Core SLA" data-meta="Project overview">
+          <span class="pico">TB</span>
+          <span class="pmain">
+            <span class="pname">Thai Bank — Core SLA</span>
+            <span class="pmeta">Lead: Aung · MS + Project</span>
+            <span class="pmini"><i style="width:50%;background:var(--risk)"></i><i style="width:25%;background:var(--warn)"></i><i style="width:25%;background:var(--ok)"></i></span>
+          </span>
+          <span class="pcount"><div class="big">6</div><div class="small2">2 risk</div></span>
+        </div>
+        <div class="prow" data-edit="ticket" data-title="AYA Bank — DR site" data-meta="Project overview">
+          <span class="pico">AY</span>
+          <span class="pmain">
+            <span class="pname">AYA Bank — DR site</span>
+            <span class="pmeta">Lead: Su · Project + CR</span>
+            <span class="pmini"><i style="width:30%;background:var(--warn)"></i><i style="width:70%;background:var(--ok)"></i></span>
+          </span>
+          <span class="pcount"><div class="big">4</div><div class="small2">1 CR</div></span>
+        </div>
+        <div class="prow" data-edit="ticket" data-title="KBZ — Core upgrade" data-meta="Project overview">
+          <span class="pico">KB</span>
+          <span class="pmain">
+            <span class="pname">KBZ — Core upgrade</span>
+            <span class="pmeta">Lead: Linn · Project</span>
+            <span class="pmini"><i style="width:20%;background:var(--warn)"></i><i style="width:80%;background:var(--ok)"></i></span>
+          </span>
+          <span class="pcount"><div class="big">5</div><div class="small2">on track</div></span>
+        </div>
+        <div class="prow" data-edit="ticket" data-title="CB Bank — Card switch" data-meta="Project overview">
+          <span class="pico">CB</span>
+          <span class="pmain">
+            <span class="pname">CB Bank — Card switch</span>
+            <span class="pmeta">Lead: Aung · Managed Svc</span>
+            <span class="pmini"><i style="width:100%;background:var(--ok)"></i></span>
+          </span>
+          <span class="pcount"><div class="big">3</div><div class="small2">healthy</div></span>
+        </div>
+      </div>
+
+      <div class="sectionhead"><div class="eyebrow">Team workload · 14 members</div></div>
+      <div class="card">
+        <div class="trow">
+          <span class="tav">AU</span>
+          <span class="tmain"><span class="tname">Aung</span><span class="tmini"><i style="width:100%;background:var(--risk)"></i></span></span>
+          <span class="tnum">7 <span class="load-pill lp-over">Over</span></span>
+        </div>
+        <div class="trow">
+          <span class="tav">SU</span>
+          <span class="tmain"><span class="tname">Su</span><span class="tmini"><i style="width:71%;background:var(--warn)"></i></span></span>
+          <span class="tnum">5 <span class="load-pill lp-warn">High</span></span>
+        </div>
+        <div class="trow">
+          <span class="tav">LI</span>
+          <span class="tmain"><span class="tname">Linn</span><span class="tmini"><i style="width:43%;background:var(--ok)"></i></span></span>
+          <span class="tnum">3 <span class="load-pill lp-ok">OK</span></span>
+        </div>
+        <div class="trow">
+          <span class="tav">PH</span>
+          <span class="tmain"><span class="tname">Phyo</span><span class="tmini"><i style="width:29%;background:var(--ok)"></i></span></span>
+          <span class="tnum">2 <span class="load-pill lp-ok">OK</span></span>
+        </div>
+        <div class="trow">
+          <span class="tav">+10</span>
+          <span class="tmain"><span class="tname">10 more members</span><span class="tmini"><i style="width:14%;background:var(--ok)"></i></span></span>
+          <span class="tnum">1 <span class="load-pill lp-ok">Light</span></span>
+        </div>
+      </div>
+      <div class="sugg"><span class="i">✦</span><span class="t"><b>Maria:</b> Aung is over capacity. Reassign BIM-1041 to Linn to balance the load?</span><span class="act">Rebalance ›</span></div>
+
+      <div class="sectionhead"><div class="eyebrow">By status</div></div>
+      <div class="funnel">
+        <div class="frow"><span class="fstep">N</span><span class="fname">New</span><span class="fbar"><i style="width:30%"></i></span><span class="fcount">4</span><span class="fval">triage</span></div>
+        <div class="frow"><span class="fstep">A</span><span class="fname">Assigned</span><span class="fbar"><i style="width:46%"></i></span><span class="fcount">6</span><span class="fval">queued</span></div>
+        <div class="frow"><span class="fstep">P</span><span class="fname">In progress</span><span class="fbar"><i style="width:38%"></i></span><span class="fcount">5</span><span class="fval">active</span></div>
+        <div class="frow"><span class="fstep">R</span><span class="fname">Review</span><span class="fbar"><i style="width:23%"></i></span><span class="fcount">3</span><span class="fval">QA</span></div>
+        <div class="frow won"><span class="fstep">✓</span><span class="fname">Done (wk)</span><span class="fbar"><i style="width:85%"></i></span><span class="fcount">11</span><span class="fval">closed</span></div>
+      </div>
+
+      <div class="sectionhead"><div class="eyebrow">By type</div></div>
+      <div class="stats">
+        <div class="stat"><div class="n">9</div><div class="l">Managed Svc</div></div>
+        <div class="stat"><div class="n">6</div><div class="l">Projects</div></div>
+        <div class="stat"><div class="n">3</div><div class="l">Change req.</div></div>
+      </div>
+
+      <div class="sectionhead"><div class="eyebrow">Needs your attention</div></div>
+      <div class="card">
+        <div class="li"><span class="ic" style="background:var(--risk-bg);color:var(--risk)">!</span>
+          <span class="main"><span class="ttl">BIM-1041 · DB latency</span><br><span class="desc">Managed Service · Thai Bank · SLA 4h</span></span>
+          <span class="right"><span class="chip c-risk">Unassigned</span></span></div>
+        <div class="sugg"><span class="i">✦</span><span class="t"><b>Maria:</b> similar to BIM-0987 (resolved by Aung). Assign to Linn (Aung is full)?</span><span class="act">Assign ›</span></div>
+      </div>
+      <div class="card">
+        <div class="li"><span class="ic" style="background:var(--warn-bg);color:var(--warn)">⏱</span>
+          <span class="main"><span class="ttl">BIM-1040 · Payment gateway errors</span><br><span class="desc">Managed Service · AYA Bank · SLA 2h</span></span>
+          <span class="right"><span class="chip c-warn">SLA risk</span></span></div>
+      </div>
+
+      <div class="eyebrow">Ask Maria</div>
+      <div class="sugg"><span class="i">✦</span><span class="t">"Who has the most open tickets?" · "Open MS tickets for Thai Bank" · "Create &amp; assign a ticket"</span><span class="act">Chat ›</span></div>
+    </section>
+    </div><!-- /body -->
+
+    <!-- Editor sheet (todo / visit outcome / deal) -->
+    <div class="ed-wrap" id="edWrap">
+      <div class="scrim" id="edScrim"></div>
+      <div class="ed-sheet" id="edSheet">
+        <div class="ed-grab" id="edGrab"></div>
+        <h3 id="edTitle">Edit</h3>
+        <div class="sub2" id="edSub"></div>
+        <div id="edBody"></div>
+        <div class="ed-actions">
+          <button class="b-ai" id="edAi">Do it via Maria</button>
+          <button class="b-sub" id="edSubmit">Submit</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Coordination toast -->
+    <div class="toast" id="toast"><span class="orb2"></span><span id="toastTx"></span></div>
+
+    <!-- AI chat FAB + sheet -->
+    <button class="fab" id="fab">✦</button>
+    <div class="sheet-wrap" id="sheet">
+      <div class="scrim" id="scrim"></div>
+      <div class="sheet" id="aiSheet">
+        <div class="ed-grab" id="aiGrab"></div>
+        <h3><span class="ai-orb" style="width:22px;height:22px"></span> Maria</h3>
+        <p class="hint">Quick-chat across visits, CRM, and tickets. <span class="reindex"><span class="d"></span>Auto-reindexed 2 min ago</span></p>
+        <div class="msgs" id="msgs">
+          <div class="bub ai">Morning Hein. Thai Bank's SLA deal is at-risk — 21 days quiet. Want me to draft a check-in?</div>
+          <div class="bub me">Which tickets need me today?</div>
+          <div class="bub ai">2 unassigned Managed-Service tickets: BIM-1041 (DB latency, Thai Bank) and BIM-1044. I can assign 1041 to Aung based on history.</div>
+        </div>
+        <div class="qchips">
+          <button>At-risk deals?</button>
+          <button>Open MS tickets</button>
+          <button>Summarise today</button>
+        </div>
+        <div class="composer">
+          <input placeholder="Ask about any client, deal, or ticket…" id="chatInput" />
+          <button id="chatSend">Send</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab bar -->
+    <nav class="tabbar">
+      <button class="active" data-go="today"><span class="ti">◎</span>Today</button>
+      <button data-go="visit"><span class="ti">📍</span>Visits</button>
+      <button data-go="crm"><span class="ti">📈</span>CRM</button>
+      <button data-go="tickets"><span class="ti">▤</span>Tickets</button>
+    </nav>
+  </div>
+
+<script>
+  // --- Face ID login ---
+  const login = document.getElementById('login');
+  const faceid = document.getElementById('faceid');
+  const loginHint = document.getElementById('loginHint');
+  function signIn() {
+    faceid.classList.add('scan');
+    loginHint.textContent = 'Recognising…';
+    setTimeout(() => { loginHint.textContent = 'Welcome back, Hein'; }, 700);
+    setTimeout(() => login.classList.add('hide'), 1100);
+  }
+  faceid.addEventListener('click', signIn);
+  document.querySelector('.login .pwd').addEventListener('click', signIn);
+
+  // --- Tab navigation ---
+  const screens = { today: 's-today', visit: 's-visit', crm: 's-crm', tickets: 's-tickets' };
+  const titles = {
+    today: ['Today', 'Wed 13 Jun · Maria has 4 things for you'],
+    visit: ['VisitPlan', '3 visits · each has MoM + workflow'],
+    crm: ['CRM', '$3.4M pipeline · 23 active deals'],
+    tickets: ['Tickets', 'Projects & Managed Service'],
+  };
+  const body = document.querySelector('.body');
+  function go(key) {
+    Object.values(screens).forEach(id => document.getElementById(id).classList.remove('active'));
+    document.getElementById(screens[key]).classList.add('active');
+    document.getElementById('hTitle').textContent = titles[key][0];
+    document.getElementById('hSub').textContent = titles[key][1];
+    document.querySelectorAll('.tabbar button').forEach(b => b.classList.toggle('active', b.dataset.go === key));
+    body.scrollTop = 0;
+  }
+  document.querySelectorAll('[data-go]').forEach(el => el.addEventListener('click', () => go(el.dataset.go)));
+
+  // --- AI chat sheet ---
+  const sheet = document.getElementById('sheet');
+  document.getElementById('fab').addEventListener('click', () => sheet.classList.add('open'));
+  document.getElementById('scrim').addEventListener('click', () => sheet.classList.remove('open'));
+
+  // --- Toast / coordination ---
+  const toast = document.getElementById('toast');
+  const toastTx = document.getElementById('toastTx');
+  function coordinate(msg) {
+    toastTx.innerHTML = msg;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 3600);
+  }
+
+  // --- Editor sheet (todo / visit / deal) ---
+  const edWrap = document.getElementById('edWrap');
+  const edTitle = document.getElementById('edTitle');
+  const edSub = document.getElementById('edSub');
+  const edBody = document.getElementById('edBody');
+
+  const templates = {
+    todo: (t, m) => ({
+      title: t, sub: m,
+      html: `
+        <div class="lbl">Task</div>
+        <textarea class="field-ta">${t}</textarea>
+        <div class="lbl">Status</div>
+        <div class="seg2"><button>Open</button><button class="on">In progress</button><button>Done</button></div>
+        <div class="lbl">Due</div>
+        <input class="field-in" value="Fri 15 Jun" />
+        <div class="ai-row"><span class="i">✦</span><span>On submit, Maria links this to the deal and updates the pipeline + ticket.</span></div>`,
+      submit: 'Updated to-do · <b>Maria</b> linked it to Thai Bank and nudged the deal.',
+      ai: 'Maria is handling it — drafting the pricing email and updating the deal.'
+    }),
+    visit: (t, m) => ({
+      title: t + ' · Visit outcome', sub: m,
+      html: `
+        <div class="lbl">Visit status</div>
+        <div class="seg2"><button>Scheduled</button><button class="on">Completed</button><button>Missed</button></div>
+        <div class="lbl">Outcome</div>
+        <div class="seg2"><button class="on">Positive</button><button>Neutral</button><button>Negative</button></div>
+        <div class="lbl">Decision & notes</div>
+        <textarea class="field-ta">Agreed on 3-year renewal at 99.9% SLA, pending legal review.</textarea>
+        <div class="lbl">Action items <span style="color:var(--ai)">· Maria extracted</span></div>
+        <ul class="ai-items">
+          <li>✓ Send premium-support pricing <span class="who2">You · Fri</span></li>
+          <li>✓ Provide updated org chart <span class="who2">Somchai · Wed</span></li>
+          <li>✓ Raise RFI for SLA scope <span class="who2">You · Mon</span></li>
+        </ul>
+        <div class="ai-row"><span class="i">✦</span><span>On submit, Maria writes the MoM, sets the outcome, and promotes to pipeline (target date + pricing).</span></div>`,
+      submit: 'Visit logged · <b>Maria</b> wrote the MoM, set outcome, promoted to pipeline + created 2 tickets.',
+      ai: 'Maria is taking over — writing the MoM, promoting to pipeline, and dispatching follow-ups.'
+    }),
+    deal: (t, m) => ({
+      title: t, sub: m,
+      html: `
+        <div class="lbl">Stage</div>
+        <div class="seg2"><button>Pipeline</button><button class="on">Proposal</button><button>Quote</button><button>Won</button><button>Lost</button></div>
+        <div class="lbl">Pipeline value (USD)</div>
+        <input class="field-in" value="420,000" />
+        <div class="lbl">Target close</div>
+        <input class="field-in" value="Q3 · 30 Sep" />
+        <div class="lbl">Loss reason <span style="color:var(--muted)">· if Lost</span></div>
+        <div class="seg2"><button class="on">—</button><button>Price</button><button>Timing</button><button>Competitor</button><button>No budget</button></div>
+        <div class="ai-row"><span class="i">✦</span><span>On submit, Maria advances the stage (or archives as Lost with reason for next-year reference) and logs the history.</span></div>`,
+      submit: 'Deal updated · <b>Maria</b> advanced the stage and queued the proposal draft.',
+      ai: 'Maria is on it — advancing the deal and drafting the next document.'
+    }),
+    ticket: (t, m) => ({
+      title: 'New ticket', sub: m,
+      html: `
+        <div class="lbl">Title</div>
+        <input class="field-in" placeholder="e.g. DB latency on core banking" />
+        <div class="lbl">Type</div>
+        <div class="seg2"><button class="on">Managed Svc</button><button>Project</button><button>Change req.</button></div>
+        <div class="lbl">Client</div>
+        <input class="field-in" placeholder="Thai Bank" />
+        <div class="lbl">Priority</div>
+        <div class="seg2"><button>Low</button><button class="on">Normal</button><button>High</button><button>Urgent</button></div>
+        <div class="lbl">Assignee <span style="color:var(--ai)">· Maria suggests</span></div>
+        <div class="seg2"><button class="on">Aung</button><button>Su</button><button>Linn</button><button>Unassigned</button></div>
+        <div class="lbl">Description</div>
+        <textarea class="field-ta" placeholder="What needs doing…"></textarea>
+        <div class="ai-row"><span class="i">✦</span><span>On submit, Maria creates the Plane ticket, stores it in the CRM + RAG, sets SLA, and notifies the assignee.</span></div>`,
+      submit: 'Ticket created · <b>Maria</b> opened BIM-1045 in Plane, assigned Aung, set SLA, indexed it.',
+      ai: 'Maria is creating the ticket — assigning, setting SLA, and notifying the assignee.'
+    }),
+    planvisit: (t, m) => ({
+      title: 'Plan visit', sub: m,
+      html: `
+        <div class="lbl">Client</div>
+        <input class="field-in" placeholder="Thai Bank" />
+        <div class="lbl">Contact</div>
+        <input class="field-in" placeholder="K. Somchai" />
+        <div class="lbl">Date & time</div>
+        <input class="field-in" value="Thu 14 Jun · 10:00" />
+        <div class="lbl">Visit type</div>
+        <div class="seg2"><button class="on">Cold visit</button><button>Follow-up</button><button>With AM</button></div>
+        <div class="lbl">Agenda</div>
+        <textarea class="field-ta" placeholder="What's the goal of this visit…">Introduce managed-service offering; understand current SLA pain points.</textarea>
+        <div class="lbl">Action items <span style="color:var(--ai)">· Maria suggests</span></div>
+        <ul class="ai-items" id="aiItems">
+          <li>✓ Prepare capability deck <span class="who2">You · Wed</span></li>
+          <li>✓ Confirm meeting with AM <span class="who2">You · Tue</span></li>
+        </ul>
+        <button class="add" id="addAI" style="margin-top:8px">+ Add action item</button>
+        <div class="ai-row"><span class="i">✦</span><span>On submit, Maria schedules the visit, prepares the agenda from past MoMs, and sets reminders for each action item.</span></div>`,
+      submit: 'Visit planned · <b>Maria</b> scheduled it, drafted the agenda, and set 2 action-item reminders.',
+      ai: 'Maria is planning it — scheduling, drafting the agenda, and assigning the prep tasks.'
+    }),
+    adddeal: (t, m) => ({
+      title: 'Add deal', sub: m,
+      html: `
+        <div class="lbl">Opportunity</div>
+        <input class="field-in" placeholder="e.g. Core banking upgrade" />
+        <div class="lbl">Client</div>
+        <input class="field-in" placeholder="Thai Bank" />
+        <div class="lbl">Stage</div>
+        <div class="seg2"><button class="on">Lead</button><button>Pipeline</button><button>Proposal</button></div>
+        <div class="lbl">Pipeline value (USD)</div>
+        <input class="field-in" placeholder="500,000" />
+        <div class="lbl">Target close</div>
+        <input class="field-in" placeholder="Q4 · 31 Dec" />
+        <div class="lbl">Action items <span style="color:var(--ai)">· Maria suggests</span></div>
+        <ul class="ai-items">
+          <li>✓ Send RFI / questionnaire <span class="who2">You · Fri</span></li>
+          <li>✓ Schedule discovery visit <span class="who2">You · Mon</span></li>
+        </ul>
+        <div class="ai-row"><span class="i">✦</span><span>On submit, Maria creates the opportunity, links the client, and queues the first lifecycle documents.</span></div>`,
+      submit: 'Deal added · <b>Maria</b> created the opportunity and queued the RFI + discovery visit.',
+      ai: 'Maria is adding it — creating the opportunity and preparing the first documents.'
+    }),
+  };
+
+  function openEditor(kind, title, meta) {
+    const tpl = templates[kind](title, meta);
+    edTitle.textContent = tpl.title;
+    edSub.textContent = tpl.sub;
+    edBody.innerHTML = tpl.html;
+    edWrap._submit = tpl.submit;
+    edWrap._ai = tpl.ai;
+    edWrap.classList.add('open');
+    // segmented toggles
+    edBody.querySelectorAll('.seg2').forEach(seg => seg.addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      seg.querySelectorAll('button').forEach(x => x.classList.remove('on'));
+      b.classList.add('on');
+    }));
+    // add action item (plan visit)
+    const addAI = edBody.querySelector('#addAI');
+    if (addAI) addAI.addEventListener('click', () => {
+      const ul = edBody.querySelector('#aiItems');
+      const li = document.createElement('li');
+      li.innerHTML = '✓ New action item <span class="who2">You · —</span>';
+      ul.appendChild(li);
+    });
+  }
+  function closeEditor() { edWrap.classList.remove('open'); }
+
+  // Delegated click for any [data-edit] (robust for all add/edit buttons)
+  document.addEventListener('click', (e) => {
+    const el = e.target.closest('[data-edit]');
+    if (!el) return;
+    e.preventDefault();
+    openEditor(el.dataset.edit, el.dataset.title || 'Edit', el.dataset.meta || '');
+  });
+  document.getElementById('edScrim').addEventListener('click', closeEditor);
+  document.getElementById('edSubmit').addEventListener('click', () => { const m = edWrap._submit; closeEditor(); setTimeout(() => coordinate(m), 250); });
+  document.getElementById('edAi').addEventListener('click', () => { const m = edWrap._ai; closeEditor(); setTimeout(() => coordinate(m), 250); });
+
+  // Inline suggestion "act" chips open the chat
+  document.querySelectorAll('.sugg .act').forEach(a => a.addEventListener('click', e => { e.stopPropagation(); sheet.classList.add('open'); }));
+
+  // CRM deal filter chips
+  const dealFilters = document.getElementById('dealFilters');
+  if (dealFilters) dealFilters.addEventListener('click', e => {
+    const b = e.target.closest('.fchip'); if (!b) return;
+    dealFilters.querySelectorAll('.fchip').forEach(x => x.classList.remove('on'));
+    b.classList.add('on');
+  });
+
+  // --- Swipe-down-to-dismiss on bottom sheets (drag the grab handle) ---
+  function enableSwipeDown(grab, panel, onClose) {
+    let startY = 0, dy = 0, dragging = false;
+    const start = (y) => { startY = y; dy = 0; dragging = true; panel.classList.add('dragging'); };
+    const move = (y) => {
+      if (!dragging) return;
+      dy = Math.max(0, y - startY);            // only downward
+      panel.style.transform = `translateY(${dy}px)`;
+    };
+    const end = () => {
+      if (!dragging) return;
+      dragging = false;
+      panel.classList.remove('dragging');
+      const dismiss = dy > 110;                 // threshold
+      panel.style.transform = dismiss ? 'translateY(100%)' : '';
+      if (dismiss) setTimeout(() => { onClose(); panel.style.transform = ''; }, 240);
+    };
+    grab.addEventListener('touchstart', e => start(e.touches[0].clientY), { passive: true });
+    grab.addEventListener('touchmove',  e => move(e.touches[0].clientY),  { passive: true });
+    grab.addEventListener('touchend', end);
+    // mouse fallback (desktop preview)
+    grab.addEventListener('mousedown', e => { start(e.clientY);
+      const mm = ev => move(ev.clientY);
+      const mu = () => { end(); document.removeEventListener('mousemove', mm); document.removeEventListener('mouseup', mu); };
+      document.addEventListener('mousemove', mm); document.addEventListener('mouseup', mu);
+    });
+  }
+  enableSwipeDown(document.getElementById('edGrab'), document.getElementById('edSheet'), closeEditor);
+  enableSwipeDown(document.getElementById('aiGrab'), document.getElementById('aiSheet'), () => sheet.classList.remove('open'));
+
+  // --- Maria chat (mock) ---
+  const msgs = document.getElementById('msgs');
+  const chatInput = document.getElementById('chatInput');
+  const chatReplies = {
+    'at-risk deals?': '3 deals are at-risk: Thai Bank SLA ($420k, 21d quiet), AYA DR site ($540k), and 1 more. Want me to draft check-ins?',
+    'open ms tickets': '9 open Managed-Service tickets. 2 unassigned (BIM-1041, BIM-1044), 3 at SLA risk. Shall I assign the unassigned ones?',
+    'summarise today': '3 visits, 2 tickets to action, 1 SOW awaiting sign-off. Aung is overloaded (7 tickets). I drafted your 09:30 follow-ups.',
+  };
+  function addBub(text, who) {
+    const b = document.createElement('div');
+    b.className = 'bub ' + who;
+    b.textContent = text;
+    msgs.appendChild(b);
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+  function ask(text) {
+    if (!text.trim()) return;
+    addBub(text, 'me');
+    const key = text.trim().toLowerCase();
+    const reply = chatReplies[key] || 'On it — checking across CRM, visits, and tickets, then I\u2019ll update everything and re-index.';
+    setTimeout(() => addBub(reply, 'ai'), 500);
+  }
+  document.getElementById('chatSend').addEventListener('click', () => { ask(chatInput.value); chatInput.value = ''; });
+  chatInput.addEventListener('keydown', e => { if (e.key === 'Enter') { ask(chatInput.value); chatInput.value = ''; } });
+  document.querySelectorAll('.qchips button').forEach(b => b.addEventListener('click', () => ask(b.textContent)));
+</script>
+</body>
+</html>
