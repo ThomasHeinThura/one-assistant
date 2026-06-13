@@ -9,21 +9,37 @@ actor APIClient {
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
 
-    enum APIError: Error { case http(Int), noToken }
+    enum APIError: LocalizedError {
+        case unauthorized, http(Int), offline
+
+        var errorDescription: String? {
+            switch self {
+            case .unauthorized: return "Not signed in — add your API token in Settings."
+            case .offline:      return "Can't reach the server. Check your connection or the API URL."
+            case .http(let c):  return "Server error (HTTP \(c))."
+            }
+        }
+    }
 
     private func request(_ path: String, method: String = "GET", body: Encodable? = nil) async throws -> Data {
         var req = URLRequest(url: Config.apiBaseURL.appendingPathComponent(path))
         req.httpMethod = method
+        req.timeoutInterval = 15
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        if let token = TokenStore.load() {
+        if let token = Config.apiToken {
             req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
         if let body { req.httpBody = try encoder.encode(AnyEncodable(body)) }
 
-        let (data, resp) = try await session.data(for: req)
-        guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw APIError.http((resp as? HTTPURLResponse)?.statusCode ?? -1)
+        let data: Data, resp: URLResponse
+        do {
+            (data, resp) = try await session.data(for: req)
+        } catch {
+            throw APIError.offline
         }
+        let code = (resp as? HTTPURLResponse)?.statusCode ?? -1
+        if code == 401 || code == 403 { throw APIError.unauthorized }
+        guard (200..<300).contains(code) else { throw APIError.http(code) }
         return data
     }
 
