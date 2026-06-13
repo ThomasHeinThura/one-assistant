@@ -20,7 +20,7 @@
 ### Model configuration (OpenRouter — Tier 2/3 only)
 
 - Base URL: `https://openrouter.ai/api/v1`
-- Pinned chain: `google/gemma-4-31b:free` → `google/gemma-4-26b-a4b:free`
+- Pinned chain: `google/gemma-4-31b-it:free` → `google/gemma-4-26b-a4b-it:free`
 - **Every request sends** `provider: { data_collection: "deny" }` (fail closed — if no
   no-logging endpoint exists, the request errors and the MoM is drafted on-device instead).
 - Account setting: training/logging on free models **disabled**.

@@ -20,8 +20,8 @@ CREATE TABLE IF NOT EXISTS ai_models (
 INSERT INTO ai_models (name, provider, model_id, role, tier_use, ready, status, detail, sort) VALUES
   ('Gemma 2B (on-device)', 'on_device', 'gemma-2b-mlx', 'draft', 'Tier 1/2/3', true, 'on_device',
    'Runs on the iPhone via Apple MLX — confidential (Tier-1) drafting never leaves the device. Test in the app.', 0),
-  ('Gemma 4 31B (free)', 'openrouter', 'google/gemma-4-31b:free', 'draft', 'Tier 2/3', false, 'unknown',
+  ('Gemma 4 31B (free)', 'openrouter', 'google/gemma-4-31b-it:free', 'draft', 'Tier 2/3', false, 'unknown',
    'Primary cloud drafter; data_collection: deny enforced.', 1),
-  ('Gemma 4 26B A4B (free)', 'openrouter', 'google/gemma-4-26b-a4b:free', 'draft', 'Tier 2/3', false, 'unknown',
+  ('Gemma 4 26B A4B (free)', 'openrouter', 'google/gemma-4-26b-a4b-it:free', 'draft', 'Tier 2/3', false, 'unknown',
    'Fallback cloud drafter in the pinned chain.', 2)
 ON CONFLICT DO NOTHING;
