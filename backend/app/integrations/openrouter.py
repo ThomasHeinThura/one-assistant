@@ -37,10 +37,15 @@ async def ping_model(settings: Settings, model: str, api_key: str | None = None)
         if resp.status_code == 200:
             txt = resp.json()["choices"][0]["message"]["content"].strip()
             return True, f"responsive (“{txt[:24]}”)"
+        if resp.status_code == 429:
+            # Valid model + key, just throttled on the free tier — counts as available.
+            return True, "available (free-tier rate limit)"
         if resp.status_code in (401, 403):
             return False, "API key rejected"
         if resp.status_code == 404:
             return False, "model not available on OpenRouter"
+        if resp.status_code == 400 and "not a valid model" in resp.text:
+            return False, "invalid model ID"
         return False, f"HTTP {resp.status_code}: {resp.text[:80]}"
     except Exception as exc:
         return False, f"unreachable: {str(exc)[:80]}"
