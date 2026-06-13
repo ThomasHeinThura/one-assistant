@@ -7,12 +7,20 @@ options:
     iOS: "17.0"
   createIntermediateGroups: true
 
+packages:
+  LLM:
+    url: https://github.com/eastriverlee/LLM.swift
+    from: "2.1.0"
+
 targets:
   MariaOne:
     type: application
     platform: iOS
     sources:
       - path: MariaOne
+    dependencies:
+      - package: LLM
+        product: LLM
     info:
       path: MariaOne/Info.plist
       properties:

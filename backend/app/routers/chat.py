@@ -24,6 +24,7 @@ router = APIRouter(prefix="/chat", tags=["ai"], dependencies=[Depends(require_au
 
 class Ask(BaseModel):
     question: str
+    skill: str | None = None   # optional skill slug: project-manager | sales-manager | coordination | presentation
 
 
 SYSTEM = (
@@ -59,6 +60,19 @@ async def _context() -> tuple[str, list[dict]]:
     return "\n".join(lines), sources
 
 
+async def _skill_prompt(slug: str | None) -> str | None:
+    """Load an enabled skill's system prompt (config.prompt) by slug."""
+    if not slug:
+        return None
+    row = await pool().fetchrow(
+        "SELECT config FROM skills WHERE name=$1 AND enabled = true", slug
+    )
+    if not row:
+        return None
+    cfg = row["config"] or {}
+    return cfg.get("prompt")
+
+
 @router.post("")
 async def ask(body: Ask) -> dict:
     settings = get_settings()
@@ -68,8 +82,10 @@ async def ask(body: Ask) -> dict:
     orow = await pool().fetchrow("SELECT env FROM mcp_integrations WHERE name='OpenRouter'")
     key = (orow["env"] or {}).get("OPENROUTER_API_KEY") if orow else None
 
+    # A selected skill swaps in its specialised system prompt (PM / sales / etc).
+    system = await _skill_prompt(body.skill) or SYSTEM
     messages = [
-        {"role": "system", "content": SYSTEM},
+        {"role": "system", "content": system},
         {"role": "user", "content": f"CONTEXT:\n{context}\n\nQUESTION: {body.question}"},
     ]
     rate_limited = False

@@ -44,8 +44,12 @@ class Settings(BaseSettings):
     # OpenRouter (Tier 2/3 cloud LLM only — Tier 1 never leaves the device)
     openrouter_api_key: str = Field(default="")
     openrouter_base_url: str = Field(default="https://openrouter.ai/api/v1")
+    # openrouter/free is a router that picks an available free model per request —
+    # it sidesteps single-model upstream throttling. Falls back to a pinned free
+    # model. NOTE: the OpenRouter account still has a free-tier daily cap (50/day;
+    # a one-time $10 deposit raises it to 1000/day). On-device is the unlimited path.
     openrouter_models: list[str] = Field(
-        default_factory=lambda: ["google/gemma-4-31b-it:free", "google/gemma-4-26b-a4b-it:free"]
+        default_factory=lambda: ["openrouter/free", "google/gemma-4-26b-a4b-it:free"]
     )
 
     # External integrations (service credentials — NOT interactive MCP; see audit item #5)
