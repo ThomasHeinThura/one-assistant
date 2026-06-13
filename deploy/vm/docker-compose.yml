@@ -18,11 +18,11 @@ volumes:
 
 services:
   traefik:
-    image: traefik:v3.2
+    image: traefik:v3.5
     restart: unless-stopped
-    # Pin the Docker API version: the host daemon is new (API 1.54) and Traefik's
-    # bundled client otherwise falls back to 1.24, which the daemon rejects
-    # (min 1.40) — breaking label-based discovery. 1.44 is within the supported range.
+    # Host daemon is new (Engine 29, API 1.54). Older Traefik clients fall back to
+    # API 1.24, which the daemon rejects (min 1.40), breaking label discovery. v3.5's
+    # client negotiates correctly; DOCKER_API_VERSION pins it as belt-and-suspenders.
     environment:
       - DOCKER_API_VERSION=1.44
     command:
