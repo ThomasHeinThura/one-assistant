@@ -34,14 +34,21 @@ struct LockView: View {
     }
 
     private func authenticate() {
+        #if targetEnvironment(simulator)
+        // Simulator has no real biometrics; skip the gate so the app is demoable.
+        // Compile-time guard — real devices ALWAYS go through Face ID below.
+        unlocked = true
+        return
+        #else
         let ctx = LAContext()
         var error: NSError?
         guard ctx.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) else {
-            unlocked = true   // simulator fallback
+            unlocked = true
             return
         }
         ctx.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "Unlock Maria One") { ok, _ in
             DispatchQueue.main.async { unlocked = ok }
         }
+        #endif
     }
 }

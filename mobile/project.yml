@@ -1,0 +1,38 @@
+# XcodeGen spec — generates MariaOne.xcodeproj from the loose Swift sources.
+#   brew install xcodegen && cd mobile && xcodegen generate
+name: MariaOne
+options:
+  bundleIdPrefix: info.technexus
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+
+targets:
+  MariaOne:
+    type: application
+    platform: iOS
+    sources:
+      - path: MariaOne
+    info:
+      path: MariaOne/Info.plist
+      properties:
+        CFBundleDisplayName: Maria One
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        # Runtime permission strings (Face ID gate + GPS check-in)
+        NSFaceIDUsageDescription: Unlock Maria One and protect confidential (Tier-1) client data.
+        NSLocationWhenInUseUsageDescription: Stamp the time and location of your visit check-in.
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: info.technexus.mariaone
+        GENERATE_INFOPLIST_FILE: "NO"
+        TARGETED_DEVICE_FAMILY: "1"          # iPhone
+        SWIFT_VERSION: "5.0"                 # language mode 5 (avoids strict-concurrency errors)
+        CODE_SIGNING_ALLOWED: "NO"           # simulator build needs no signing
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        # Point the app at the live API; override per-scheme if needed.
+        # (The bearer token still comes from the Keychain — empty on a fresh install.)
