@@ -12,23 +12,34 @@ name: maria-edge
 networks:
   web:
     external: true
+  dockerapi:          # isolated: only Traefik <-> dockerproxy
+    internal: true
 
 volumes:
   letsencrypt:
 
 services:
+  # nginx socket proxy: rewrites Traefik's old /v1.24/ API calls to a version the
+  # new daemon (Engine 29, API min 1.40) accepts. Read-only, internal-only.
+  dockerproxy:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./dockerproxy.conf:/etc/nginx/nginx.conf:ro
+    networks: [dockerapi]
+    security_opt: ["no-new-privileges:true"]
+
   traefik:
     image: traefik:v3.5
     restart: unless-stopped
-    # Host daemon is new (Engine 29, API 1.54). Older Traefik clients fall back to
-    # API 1.24, which the daemon rejects (min 1.40), breaking label discovery. v3.5's
-    # client negotiates correctly; DOCKER_API_VERSION pins it as belt-and-suspenders.
-    environment:
-      - DOCKER_API_VERSION=1.44
+    depends_on: [dockerproxy]
     command:
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
       - --providers.docker.network=web
+      # Talk to the daemon through the version-rewriting proxy (not the raw socket).
+      - --providers.docker.endpoint=tcp://dockerproxy:2375
       - --entrypoints.web.address=:80
       - --entrypoints.websecure.address=:443
       # Force HTTPS: redirect all :80 -> :443
@@ -49,9 +60,8 @@ services:
       - "443:443"
       - "127.0.0.1:8080:8080"   # dashboard: ssh -L 8080:127.0.0.1:8080
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
       - letsencrypt:/letsencrypt
-    networks: [web]
+    networks: [web, dockerapi]
     # Hardened: drop all caps, re-add only privileged-port binding.
     cap_drop: ["ALL"]
     cap_add: ["NET_BIND_SERVICE"]
@@ -69,7 +79,7 @@ services:
     networks: [web]
     labels:
       - traefik.enable=true
-      - traefik.http.routers.dockge.rule=Host(`dockge.${DOMAIN}`)
+      - traefik.http.routers.dockge.rule=Host(`dockage.${DOMAIN}`)
       - traefik.http.routers.dockge.entrypoints=websecure
       - traefik.http.routers.dockge.tls.certresolver=le
       - traefik.http.services.dockge.loadbalancer.server.port=5001
