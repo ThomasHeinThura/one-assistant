@@ -72,18 +72,26 @@ async def ask(body: Ask) -> dict:
         {"role": "system", "content": SYSTEM},
         {"role": "user", "content": f"CONTEXT:\n{context}\n\nQUESTION: {body.question}"},
     ]
+    rate_limited = False
     try:
         answer = await openrouter.complete(settings, messages, api_key=key, max_tokens=400)
         return {"answer": answer, "sources": sources, "model": "openrouter", "grounded": True}
     except Exception as exc:
         log.warning("chat cloud fallback: %s", exc)
+        rate_limited = "rate_limited" in str(exc)
 
     # Deterministic fallback so the endpoint always answers, even cloud-down.
     q = body.question.lower()
+    note = (" (Maria's free cloud model is rate-limited right now — add OpenRouter credits for "
+            "always-on AI replies.)") if rate_limited else ""
     if "at-risk" in q or "at risk" in q:
-        return {"answer": f"{len(sources)} at-risk deals right now." +
-                (" Top: " + sources[0]["title"] if sources else ""),
+        top = (" Top: " + sources[0]["title"]) if sources else ""
+        return {"answer": f"{len(sources)} at-risk deal(s) right now.{top}{note}",
                 "sources": sources, "model": "fallback", "grounded": True}
-    return {"answer": "Maria's cloud model is unavailable right now — check the OpenRouter key in "
-                      "the admin console. I can still answer from CRM data once it's back.",
-            "sources": sources, "model": "fallback", "grounded": False}
+    if "ticket" in q:
+        return {"answer": f"I track open tickets from Plane.{note}",
+                "sources": sources, "model": "fallback", "grounded": True}
+    msg = ("Maria's free cloud model is rate-limited right now — please retry in a moment. "
+           "Add OpenRouter credits for reliable replies." if rate_limited
+           else "Maria's cloud model is unavailable — check the OpenRouter key in the admin console.")
+    return {"answer": msg, "sources": sources, "model": "fallback", "grounded": False}

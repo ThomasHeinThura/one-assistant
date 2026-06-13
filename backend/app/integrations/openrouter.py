@@ -6,6 +6,8 @@ is available the request errors and the caller falls back to on-device drafting
 """
 from __future__ import annotations
 
+import asyncio
+
 import httpx
 
 from ..config import Settings
@@ -68,23 +70,41 @@ async def complete(
     if not key:
         raise OpenRouterError("OPENROUTER_API_KEY not configured")
     headers = {"Authorization": f"Bearer {key}", "X-Title": title, "Content-Type": "application/json"}
-    last_err: Exception | None = None
+    last_err = ""
+    rate_limited = False
     async with httpx.AsyncClient(base_url=settings.openrouter_base_url, timeout=45) as client:
-        for model in settings.openrouter_models:
-            body = {
-                "model": model,
-                "messages": messages,
-                "max_tokens": max_tokens,
-                "provider": {"data_collection": "deny"},  # fail closed: no logging/training
-            }
-            try:
-                resp = await client.post("/chat/completions", headers=headers, json=body)
-                resp.raise_for_status()
-                return resp.json()["choices"][0]["message"]["content"].strip()
-            except Exception as exc:
-                last_err = exc
+        # Two passes: free models are throttled upstream and ask us to "retry shortly".
+        for attempt in range(2):
+            for model in settings.openrouter_models:
+                body = {
+                    "model": model,
+                    "messages": messages,
+                    "max_tokens": max_tokens,
+                    "provider": {"data_collection": "deny"},  # fail closed: no logging/training
+                }
+                try:
+                    resp = await client.post("/chat/completions", headers=headers, json=body)
+                except Exception as exc:
+                    last_err = f"unreachable: {str(exc)[:100]}"
+                    continue
+                txt = resp.text
+                if resp.status_code == 200:
+                    data = resp.json()
+                    if data.get("choices"):
+                        return data["choices"][0]["message"]["content"].strip()
+                    last_err = f"empty: {txt[:120]}"
+                # OpenRouter wraps upstream throttling as 429, or 400/200 with code 429.
+                if resp.status_code == 429 or '"code":429' in txt or "rate-limit" in txt.lower():
+                    rate_limited = True
+                    last_err = "rate-limited upstream"
+                else:
+                    last_err = f"HTTP {resp.status_code}: {txt[:120]}"
+            if rate_limited and attempt == 0:
+                await asyncio.sleep(2.0)  # brief backoff, then one more pass
                 continue
-    raise OpenRouterError(f"all pinned no-logging models failed: {last_err}")
+            break
+    prefix = "rate_limited: " if rate_limited else ""
+    raise OpenRouterError(f"{prefix}all pinned no-logging models failed: {last_err}")
 
 
 async def draft_mom(settings: Settings, prompt: str, *, title: str = "Maria One", tier: int = 2) -> str:
