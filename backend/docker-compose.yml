@@ -1,0 +1,116 @@
+# Maria One — local/dev stack. Mirrors the Azure topology (Container Apps + managed
+# Postgres/Redis) so dev/prod parity holds. Production overrides live in deploy/azure.
+#
+#   cp .env.example .env   &&   docker compose up --build
+#
+# Security posture (see SECURITY.md):
+#   * no host ports exposed except the API (and only via the reverse proxy/tunnel in prod)
+#   * every service has a healthcheck; api/worker wait for db+redis to be healthy
+#   * secrets come from .env (Key Vault in Azure), never baked into images
+name: maria-one
+
+x-restart: &restart
+  restart: unless-stopped
+
+services:
+  db:
+    image: postgres:16-alpine
+    <<: *restart
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-maria}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-maria}
+      POSTGRES_DB: ${POSTGRES_DB:-maria}
+    # Migrations auto-run on first init (alphabetical).
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-maria}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    # No host port in prod; expose locally only for psql/debugging.
+    ports:
+      - "127.0.0.1:5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    <<: *restart
+    command: ["redis-server", "--save", "60", "1", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  qdrant:
+    image: qdrant/qdrant:v1.12.4
+    <<: *restart
+    volumes:
+      - qdrantdata:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/6333 && echo done"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: .
+    <<: *restart
+    env_file: .env
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    ports:
+      - "127.0.0.1:8000:8000"   # in prod, only the ingress/tunnel reaches this
+    # Drop all Linux caps; container already runs as non-root (uid 10001).
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+
+  worker:
+    build: .
+    <<: *restart
+    command: ["python", "-m", "app.workers"]
+    env_file: .env
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+
+  # Self-hosted Langfuse (tracing). Pinned; uses its own bundled migrations.
+  langfuse:
+    image: langfuse/langfuse:2
+    <<: *restart
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-maria}:${POSTGRES_PASSWORD:-maria}@db:5432/${POSTGRES_DB:-maria}
+      NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:-change-me-in-prod}
+      SALT: ${LANGFUSE_SALT:-change-me-in-prod}
+      NEXTAUTH_URL: http://localhost:3000
+    ports:
+      - "127.0.0.1:3000:3000"
+
+  # ---- Optional Kafka (scale phase only) ----
+  # Default bus is Redis Streams; `docker compose up` does NOT start Kafka.
+  # Enable with:  BUS_BACKEND=kafka docker compose --profile kafka up
+  kafka:
+    image: bitnami/kafka:3.9
+    profiles: ["kafka"]
+    <<: *restart
+    environment:
+      KAFKA_CFG_NODE_ID: "1"
+      KAFKA_CFG_PROCESS_ROLES: "controller,broker"
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: "1@kafka:9093"
+      KAFKA_CFG_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093"
+      KAFKA_CFG_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9092"
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT"
+    volumes:
+      - kafkadata:/bitnami/kafka
+
+volumes:
+  pgdata:
+  qdrantdata:
+  kafkadata:

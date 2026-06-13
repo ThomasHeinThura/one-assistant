@@ -1,0 +1,52 @@
+# ---- Secrets / env ----
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+.coverage.*
+dist/
+build/
+
+# ---- Node / web ----
+node_modules/
+.cache/
+*.log
+
+# ---- Swift / Xcode ----
+.build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcscmblueprint
+Pods/
+.swiftpm/
+
+# ---- Docker / data volumes ----
+pgdata/
+qdrantdata/
+kafkadata/
+
+# ---- OS / editor ----
+.DS_Store
+.DS_Store*
+Thumbs.db
+*.tmp
+*.bak
+.idea/
+.vscode/
+*.swp

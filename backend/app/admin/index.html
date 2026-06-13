@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Maria One · Admin Console</title>
+<style>
+  :root{
+    --navy-900:#0b1f3a; --navy-800:#102a4c; --navy-700:#1e3a5f; --brand:#2f5d8f;
+    --ai:#6c4cd1; --ai-bg:#efeafb;
+    --ok:#1f9d6b; --ok-bg:#e7f6ef; --warn:#c9810a; --warn-bg:#fdf3e0;
+    --risk:#d24545; --risk-bg:#fceaea;
+    --bg:#eef2f7; --surface:#ffffff; --surface-2:#f7f9fc;
+    --ink:#16233a; --muted:#64748b; --line:#e6ebf2; --line-2:#eef2f7;
+    --ring:rgba(47,93,143,.25);
+    --shadow-sm:0 1px 2px rgba(16,42,76,.06);
+    --shadow:0 1px 3px rgba(16,42,76,.06),0 8px 24px rgba(16,42,76,.07);
+    --sidebar:252px;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;
+    font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  a{color:inherit;text-decoration:none}
+
+  /* ---------- App shell ---------- */
+  .shell{display:grid;grid-template-columns:var(--sidebar) 1fr;min-height:100vh}
+
+  /* Sidebar */
+  .sidebar{background:linear-gradient(180deg,var(--navy-800),var(--navy-900));color:#cdd9ea;
+    display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
+  .brand{display:flex;align-items:center;gap:11px;padding:20px 20px 18px;border-bottom:1px solid rgba(255,255,255,.07)}
+  .brand .logo{width:36px;height:36px;border-radius:10px;flex:none;
+    background:radial-gradient(circle at 30% 30%,#9b7ff0,var(--ai));
+    display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;
+    box-shadow:0 6px 16px rgba(108,76,209,.45)}
+  .brand .nm{color:#fff;font-weight:700;font-size:15px;letter-spacing:-.2px}
+  .brand .nm small{display:block;color:#8ea6c8;font-weight:500;font-size:11px;letter-spacing:.3px}
+  .nav{padding:14px 12px;display:flex;flex-direction:column;gap:2px;overflow-y:auto}
+  .nav .grp{font-size:10.5px;text-transform:uppercase;letter-spacing:.7px;color:#6f88ab;
+    padding:14px 12px 6px}
+  .nav a{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:9px;
+    color:#bccbe0;font-weight:500;cursor:pointer;transition:background .12s,color .12s}
+  .nav a .ic{width:18px;text-align:center;font-size:15px;opacity:.9}
+  .nav a:hover{background:rgba(255,255,255,.06);color:#fff}
+  .nav a.active{background:rgba(108,76,209,.22);color:#fff;box-shadow:inset 2px 0 0 var(--ai)}
+  .side-foot{margin-top:auto;padding:14px 18px;border-top:1px solid rgba(255,255,255,.07);
+    font-size:11.5px;color:#7f97b9}
+  .side-foot .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--ok);margin-right:6px}
+
+  /* Main column */
+  .main{display:flex;flex-direction:column;min-width:0}
+  .topbar{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.85);backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--line);display:flex;align-items:center;gap:16px;padding:0 26px;height:62px}
+  .topbar h1{font-size:17px;font-weight:700;margin:0;letter-spacing:-.2px}
+  .topbar .crumb{color:var(--muted);font-size:12.5px}
+  .topbar .spacer{flex:1}
+  .search{display:flex;align-items:center;gap:8px;background:var(--surface-2);border:1px solid var(--line);
+    border-radius:9px;padding:7px 11px;color:var(--muted);min-width:220px}
+  .search input{border:0;background:none;outline:none;font:inherit;color:var(--ink);width:100%}
+  .env{font-size:11px;font-weight:700;padding:4px 10px;border-radius:999px;background:var(--ok-bg);color:var(--ok)}
+  .avatar{width:34px;height:34px;border-radius:50%;background:var(--navy-700);color:#fff;
+    display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12.5px}
+
+  .content{padding:26px;max-width:1240px;width:100%;margin:0 auto}
+  .view{display:none;animation:fade .18s ease}
+  .view.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  .page-intro{margin:0 0 20px}
+  .page-intro h2{font-size:20px;margin:0 0 4px;letter-spacing:-.3px}
+  .page-intro p{margin:0;color:var(--muted);font-size:13px;max-width:720px}
+
+  /* ---------- KPI cards ---------- */
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}
+  .kpi{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;box-shadow:var(--shadow-sm)}
+  .kpi .lab{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:7px}
+  .kpi .lab .dot{width:8px;height:8px;border-radius:50%}
+  .kpi .val{font-size:28px;font-weight:700;letter-spacing:-.6px;margin-top:8px}
+  .kpi .sub{font-size:11.5px;color:var(--muted);margin-top:2px}
+
+  /* ---------- Cards ---------- */
+  .grid{display:grid;gap:16px}
+  .grid.two{grid-template-columns:1fr 1fr}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow-sm);overflow:hidden}
+  .card-h{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 18px;border-bottom:1px solid var(--line-2)}
+  .card-h .ttl{font-size:14px;font-weight:700}
+  .card-h .desc{font-size:12px;color:var(--muted);margin-top:2px;font-weight:400}
+  .card-b{padding:18px}
+  .card-b.flush{padding:0}
+
+  /* ---------- Tables ---------- */
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  thead th{text-align:left;font-size:10.5px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);
+    font-weight:700;padding:11px 18px;background:var(--surface-2);border-bottom:1px solid var(--line)}
+  tbody td{padding:13px 18px;border-bottom:1px solid var(--line-2);vertical-align:middle}
+  tbody tr:last-child td{border-bottom:0}
+  tbody tr:hover{background:var(--surface-2)}
+  td .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:var(--ink)}
+  td .sub{color:var(--muted);font-size:12px;margin-top:2px}
+
+  /* ---------- Pills / badges ---------- */
+  .pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px;white-space:nowrap}
+  .pill .d{width:6px;height:6px;border-radius:50%}
+  .ok{background:var(--ok-bg);color:var(--ok)} .ok .d{background:var(--ok)}
+  .warn{background:var(--warn-bg);color:var(--warn)} .warn .d{background:var(--warn)}
+  .risk{background:var(--risk-bg);color:var(--risk)} .risk .d{background:var(--risk)}
+  .ai{background:var(--ai-bg);color:var(--ai)} .ai .d{background:var(--ai)}
+  .neutral{background:#eef2f7;color:#5b6b82} .neutral .d{background:#8896aa}
+
+  /* ---------- Buttons ---------- */
+  .btn{appearance:none;border:1px solid transparent;background:var(--navy-700);color:#fff;
+    border-radius:9px;padding:9px 15px;font:inherit;font-weight:600;font-size:13px;cursor:pointer;
+    transition:filter .12s,box-shadow .12s,background .12s}
+  .btn:hover{filter:brightness(1.07)}
+  .btn:active{transform:translateY(.5px)}
+  .btn.primary{background:var(--ai);box-shadow:0 6px 16px rgba(108,76,209,.28)}
+  .btn.ghost{background:#fff;border-color:var(--line);color:var(--navy-700)}
+  .btn.ghost:hover{background:var(--surface-2);filter:none}
+  .btn.sm{padding:6px 11px;font-size:12px;border-radius:8px}
+  .btn.danger{background:#fff;border-color:var(--risk-bg);color:var(--risk)}
+  .btn.danger:hover{background:var(--risk-bg);filter:none}
+  .actions{display:flex;gap:7px;flex-wrap:wrap}
+
+  /* ---------- Forms ---------- */
+  .form{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .form .full{grid-column:1/-1}
+  .form .span2{grid-column:span 2}
+  .field label{display:block;font-size:11.5px;font-weight:600;color:var(--muted);margin:0 0 6px;letter-spacing:.2px}
+  .field input,.field select{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px;
+    font:inherit;font-size:13px;background:#fff;color:var(--ink);transition:border .12s,box-shadow .12s}
+  .field input:focus,.field select:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px var(--ring)}
+  .field input::placeholder{color:#9aa7b8}
+  .form-foot{display:flex;align-items:center;gap:12px;margin-top:16px}
+
+  .callout{display:flex;gap:10px;background:var(--surface-2);border:1px solid var(--line);border-radius:11px;
+    padding:11px 13px;font-size:12.5px;color:#3a4a63;margin:0 0 16px}
+  .callout .i{color:var(--ai)}
+  code{background:#eef2f7;border-radius:5px;padding:1px 6px;font-family:ui-monospace,Menlo,monospace;font-size:12px}
+  .note{font-size:12px;color:var(--muted)}
+  .out{font-family:ui-monospace,Menlo,monospace;font-size:12px;background:var(--navy-900);color:#cfe0f5;
+    border-radius:10px;padding:12px 14px;margin-top:14px;white-space:pre-wrap;word-break:break-word;display:none}
+  .out.show{display:block}
+
+  @media(max-width:920px){
+    :root{--sidebar:0px}
+    .shell{grid-template-columns:1fr}
+    .sidebar{display:none}
+    .kpis{grid-template-columns:repeat(2,1fr)}
+    .grid.two{grid-template-columns:1fr}
+    .form{grid-template-columns:1fr}
+    .search{display:none}
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+  <!-- ===================== Sidebar ===================== -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">✦</div>
+      <div class="nm">Maria One<small>Admin Console</small></div>
+    </div>
+    <nav class="nav" id="nav">
+      <div class="grp">Operations</div>
+      <a data-view="overview" class="active"><span class="ic">▦</span> Overview</a>
+      <a data-view="observability"><span class="ic">◔</span> Observability</a>
+      <div class="grp">Configuration</div>
+      <a data-view="integrations"><span class="ic">⇄</span> MCP Integrations</a>
+      <a data-view="skills"><span class="ic">✦</span> Skills</a>
+      <a data-view="ai"><span class="ic">⚙</span> AI &amp; Models</a>
+      <a data-view="sync"><span class="ic">⇅</span> Workflow &amp; Sync</a>
+    </nav>
+    <div class="side-foot"><span class="dot"></span>API healthy · v0.1.0</div>
+  </aside>
+
+  <!-- ===================== Main ===================== -->
+  <div class="main">
+    <header class="topbar">
+      <div>
+        <h1 id="pageTitle">Overview</h1>
+        <div class="crumb" id="pageCrumb">Operations / Overview</div>
+      </div>
+      <div class="spacer"></div>
+      <div class="search"><span>⌕</span><input placeholder="Search settings, integrations, skills…" /></div>
+      <span class="env">PROD</span>
+      <div class="avatar">HT</div>
+    </header>
+
+    <div class="content">
+
+      <!-- ============ Overview ============ -->
+      <section class="view active" id="v-overview">
+        <div class="page-intro">
+          <h2>Operations overview</h2>
+          <p>Live health of the coordination pipeline — worker pools, queue depth, and the
+             three-system dispatch fan-out.</p>
+        </div>
+
+        <div class="kpis">
+          <div class="kpi"><div class="lab"><span class="dot" style="background:var(--ai)"></span>Outbox pending</div>
+            <div class="val" id="qPending">–</div><div class="sub">awaiting workers</div></div>
+          <div class="kpi"><div class="lab"><span class="dot" style="background:var(--warn)"></span>Failed / retrying</div>
+            <div class="val" id="qFailed">–</div><div class="sub">backoff queue</div></div>
+          <div class="kpi"><div class="lab"><span class="dot" style="background:var(--ok)"></span>Verified</div>
+            <div class="val" id="qVerified">–</div><div class="sub">triple-checked</div></div>
+          <div class="kpi"><div class="lab"><span class="dot" style="background:var(--brand)"></span>Integrations</div>
+            <div class="val" id="kIntegrations">–</div><div class="sub">MCP connected</div></div>
+        </div>
+
+        <div class="grid two">
+          <div class="card">
+            <div class="card-h"><div><div class="ttl">Worker pools</div>
+              <div class="desc">Dedicated Redis-queue pools — a slow API can't block indexing or the UI.</div></div></div>
+            <div class="card-b flush">
+              <table>
+                <thead><tr><th>Pool</th><th>Job</th><th>Status</th></tr></thead>
+                <tbody>
+                  <tr><td>API</td><td class="note">writes + outbox</td><td><span class="pill ok"><span class="d"></span>live</span></td></tr>
+                  <tr><td>Reindex</td><td class="note">→ Qdrant</td><td><span class="pill warn"><span class="d"></span>M2</span></td></tr>
+                  <tr><td>Dispatch</td><td class="note">→ Plane / Notion</td><td><span class="pill warn"><span class="d"></span>M4</span></td></tr>
+                  <tr><td>Derive</td><td class="note">todos / health / SLA</td><td><span class="pill warn"><span class="d"></span>M2</span></td></tr>
+                  <tr><td>Verify</td><td class="note">triple-check</td><td><span class="pill warn"><span class="d"></span>M4</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-h"><div><div class="ttl">Dispatch fan-out</div>
+              <div class="desc">Per-destination status for recent confirmed MoMs.</div></div></div>
+            <div class="card-b flush">
+              <table id="dispatchTbl">
+                <thead><tr><th>MoM</th><th>CRM</th><th>Plane</th><th>Notion</th></tr></thead>
+                <tbody><tr><td colspan="4" class="note" style="padding:18px">Connect to
+                  <code>/visits/mom/{id}/dispatch</code> — populated once M4 dispatch runs.</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ Observability ============ -->
+      <section class="view" id="v-observability">
+        <div class="page-intro">
+          <h2>Observability</h2>
+          <p>Every model call and dispatch is traced in self-hosted Langfuse — kept in-stack so
+             confidential prompts never reach a third-party observability SaaS.</p>
+        </div>
+        <div class="card">
+          <div class="card-h"><div class="ttl">Tracing</div>
+            <a class="btn ghost sm" href="http://localhost:3000" target="_blank">Open Langfuse ↗</a></div>
+          <div class="card-b">
+            <div class="callout"><span class="i">◔</span><span>One trace per visit/MoM and per dispatch call —
+              tokens, cost, latency, tagged with sensitivity tier &amp; destination. Use it to prove a
+              Tier-1 visit never touched the cloud.</span></div>
+            <table>
+              <thead><tr><th>Signal</th><th>Source</th><th>Alert on</th></tr></thead>
+              <tbody>
+                <tr><td>Tier-1 cloud rejections</td><td class="note">backend guard</td><td><span class="pill risk"><span class="d"></span>any</span></td></tr>
+                <tr><td>Dispatch dead-letter</td><td class="note">outbox</td><td><span class="pill warn"><span class="d"></span>growth</span></td></tr>
+                <tr><td>Model data_policy drift</td><td class="note">OpenRouter</td><td><span class="pill warn"><span class="d"></span>change</span></td></tr>
+                <tr><td>Auth failures</td><td class="note">API</td><td><span class="pill warn"><span class="d"></span>spike</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:16px">
+          <div class="card-h"><div><div class="ttl">Pipeline backbone</div>
+            <div class="desc">Outbox → message bus → worker pools → RAG, all traced.</div></div>
+            <span class="pill ok" id="busPill"><span class="d"></span>checking…</span></div>
+          <div class="card-b flush">
+            <table>
+              <thead><tr><th>Component</th><th>Tech</th><th>Role</th></tr></thead>
+              <tbody>
+                <tr><td>Message bus / store</td><td><span class="pill ai">Redis Streams</span></td><td class="note">durable log · consumer groups · replay (Kafka drop-in for scale)</td></tr>
+                <tr><td>Transactional outbox</td><td><span class="pill neutral">Postgres</span></td><td class="note">commit + event in one txn — no lost updates</td></tr>
+                <tr><td>RAG index</td><td><span class="pill neutral">Qdrant</span></td><td class="note">tier-aware embeddings; Tier-1 never cloud-embedded</td></tr>
+                <tr><td>Coordination</td><td><span class="pill neutral">Redis</span></td><td class="note">idempotency keys · per-entity locks · backoff</td></tr>
+                <tr><td>Tracing</td><td><span class="pill neutral">Langfuse</span></td><td class="note">one span per event — tokens, cost, tier, destination</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ MCP Integrations ============ -->
+      <section class="view" id="v-integrations">
+        <div class="page-intro">
+          <h2>MCP integrations</h2>
+          <p>MCP runs <b>server-side</b> — the phone never speaks MCP. This keeps Plane/Notion
+             credentials off the device and lets the dispatch worker own idempotency and retries.</p>
+        </div>
+        <div class="callout"><span class="i">🔒</span><span>Tokens live in <b>Azure Key Vault</b>.
+          Store the secret <b>name</b> in <code>auth_ref</code> — never paste the token itself.</span></div>
+
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-h"><div class="ttl">Connected integrations</div>
+            <span class="note" id="mcpCount"></span></div>
+          <div class="card-b flush">
+            <table id="mcpTbl">
+              <thead><tr><th>Name</th><th>Kind</th><th>Transport</th><th>Endpoint</th><th>Enabled</th><th>Status</th><th></th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-h"><div class="ttl">Add integration</div></div>
+          <div class="card-b">
+            <div class="form">
+              <div class="field"><label>Name</label><input id="mName" placeholder="e.g. Plane / Notion / Custom"/></div>
+              <div class="field"><label>Kind</label><select id="mKind"><option>custom</option><option>plane</option><option>notion</option></select></div>
+              <div class="field"><label>Transport</label><select id="mTransport"><option>http</option><option>sse</option><option>stdio</option></select></div>
+              <div class="field span2"><label>Endpoint (URL or launch command)</label><input id="mEndpoint" placeholder="https://… or npx @org/mcp-server"/></div>
+              <div class="field"><label>Auth — Key Vault secret name</label><input id="mAuthRef" placeholder="PLANE-API-KEY"/></div>
+            </div>
+            <div class="form-foot"><button class="btn primary" id="addMcp">+ Add integration</button>
+              <span class="note">New integrations start disabled — enable after a successful test.</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ Skills ============ -->
+      <section class="view" id="v-skills">
+        <div class="page-intro">
+          <h2>Agent skills</h2>
+          <p>Capabilities Maria can invoke. The default <b>echo-test</b> skill round-trips a message
+             through the agent/MCP layer with no side effects — run it to smoke-test wiring.</p>
+        </div>
+
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-h"><div class="ttl">Registered skills</div>
+            <span class="note" id="skillCount"></span></div>
+          <div class="card-b flush">
+            <table id="skillTbl">
+              <thead><tr><th>Skill</th><th>Kind</th><th>Trigger</th><th>Enabled</th><th></th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="card-b" style="border-top:1px solid var(--line-2)"><div class="out" id="runOut"></div></div>
+        </div>
+
+        <div class="card">
+          <div class="card-h"><div class="ttl">Add skill</div></div>
+          <div class="card-b">
+            <div class="form">
+              <div class="field"><label>Name (kebab-case)</label><input id="sName" placeholder="draft-proposal"/></div>
+              <div class="field"><label>Kind</label><select id="sKind"><option>custom</option><option>test</option><option>builtin</option></select></div>
+              <div class="field"><label>Trigger</label><input id="sTrigger" placeholder="when Maria should use it"/></div>
+              <div class="field full"><label>Description</label><input id="sDesc" placeholder="what the skill does"/></div>
+            </div>
+            <div class="form-foot"><button class="btn primary" id="addSkill">+ Add skill</button></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ AI & Models ============ -->
+      <section class="view" id="v-ai">
+        <div class="page-intro">
+          <h2>AI &amp; models</h2>
+          <p>Cloud LLM applies to Tier 2/3 only. Tier 1 (confidential) is drafted entirely on-device
+             and is <b>never</b> sent to the cloud.</p>
+        </div>
+        <div class="card" style="max-width:680px">
+          <div class="card-h"><div><div class="ttl">OpenRouter</div>
+            <div class="desc">Pinned no-logging chain · <code>data_collection: "deny"</code> (fail-closed).</div></div>
+            <span class="pill ai" id="orStatus"><span class="d"></span>not saved</span></div>
+          <div class="card-b">
+            <div class="form" style="grid-template-columns:1fr">
+              <div class="field"><label>API key</label><input id="orKey" type="password" placeholder="sk-or-…"/></div>
+              <div class="field"><label>Pinned no-logging model chain (ordered)</label>
+                <input id="orModels" value="google/gemma-4-31b:free, google/gemma-4-26b-a4b:free"/></div>
+              <div class="field"><label>Tier-1 cloud guard</label>
+                <select id="tier1"><option>Block (recommended)</option><option>Warn only</option></select></div>
+            </div>
+            <div class="form-foot"><button class="btn primary" id="saveOR">Save configuration</button>
+              <span class="note">In production these persist to Azure Key Vault, not the browser.</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ Workflow & Sync ============ -->
+      <section class="view" id="v-sync">
+        <div class="page-intro">
+          <h2>Workflow &amp; source of truth</h2>
+          <p>Per-object sync direction — this is what stops the verifier from clobbering a teammate's
+             Plane edit or a human's Notion change.</p>
+        </div>
+        <div class="card">
+          <div class="card-h"><div class="ttl">Per-object source of truth</div></div>
+          <div class="card-b flush">
+            <table>
+              <thead><tr><th>Object</th><th>Authoritative store</th><th>Sync</th><th>Verifier behaviour</th></tr></thead>
+              <tbody>
+                <tr><td>Clients / Visits / MoM / Opportunities</td><td><span class="pill neutral"><span class="d"></span>Postgres</span></td>
+                  <td class="note">push → mirrors</td><td class="note">re-dispatch on drift</td></tr>
+                <tr><td>Ticket <b>status</b></td><td><span class="pill ai"><span class="d"></span>Plane</span></td>
+                  <td class="note">inbound (webhook/poll)</td><td class="note">pull; never clobber Plane edit</td></tr>
+                <tr><td>Notion meeting notes</td><td><span class="pill neutral"><span class="d"></span>write-once</span></td>
+                  <td class="note">create only</td><td class="note">existence check only</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  // ---------- Sidebar routing ----------
+  const titles = {
+    overview:['Overview','Operations / Overview'],
+    observability:['Observability','Operations / Observability'],
+    integrations:['MCP Integrations','Configuration / Integrations'],
+    skills:['Skills','Configuration / Skills'],
+    ai:['AI & Models','Configuration / AI & Models'],
+    sync:['Workflow & Sync','Configuration / Workflow & Sync'],
+  };
+  document.getElementById('nav').addEventListener('click', e => {
+    const a = e.target.closest('[data-view]'); if(!a) return;
+    const v = a.dataset.view;
+    document.querySelectorAll('.nav a').forEach(x=>x.classList.toggle('active',x===a));
+    document.querySelectorAll('.view').forEach(s=>s.classList.toggle('active',s.id==='v-'+v));
+    document.getElementById('pageTitle').textContent = titles[v][0];
+    document.getElementById('pageCrumb').textContent = titles[v][1];
+    window.scrollTo({top:0,behavior:'smooth'});
+  });
+
+  // ---------- OpenRouter ----------
+  document.getElementById('saveOR').onclick = () => {
+    const s = document.getElementById('orStatus');
+    s.innerHTML = '<span class="d"></span>saved'; s.className = 'pill ok';
+  };
+
+  // Bearer token for the admin API (blank ok in dev). In prod the console
+  // authenticates via Entra and injects the token here.
+  const TOKEN = new URLSearchParams(location.search).get('token') || '';
+  const hdr = TOKEN ? { 'Authorization': 'Bearer ' + TOKEN } : {};
+  const api = (path, opts = {}) =>
+    fetch('/admin/api' + path, { headers: { 'Content-Type': 'application/json', ...hdr }, ...opts });
+  const esc = s => (s ?? '').toString().replace(/[<>&]/g, c => ({ '<':'&lt;','>':'&gt;','&':'&amp;' }[c]));
+  const tbody = sel => document.querySelector(sel + ' tbody');
+
+  // ---------- MCP integrations ----------
+  async function loadMcp() {
+    const tb = tbody('#mcpTbl'); tb.innerHTML = '';
+    let rows = [];
+    try { rows = await (await api('/mcp')).json(); } catch (e) {}
+    const connected = rows.filter(r => r.status === 'connected').length;
+    document.getElementById('mcpCount').textContent = `${rows.length} configured · ${connected} connected`;
+    document.getElementById('kIntegrations').textContent = connected;
+    for (const m of rows) {
+      const cls = m.status === 'connected' ? 'ok' : m.status === 'error' ? 'risk' : m.status === 'disabled' ? 'neutral' : 'warn';
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td><b>${esc(m.name)}</b></td><td><span class="pill neutral">${esc(m.kind)}</span></td>
+        <td class="mono">${esc(m.transport)}</td>
+        <td>${m.endpoint ? `<span class="mono">${esc(m.endpoint)}</span>` : '<span class="note">— not set</span>'}</td>
+        <td>${m.enabled ? '<span class="pill ok"><span class="d"></span>on</span>' : '<span class="pill neutral">off</span>'}</td>
+        <td><span class="pill ${cls}"><span class="d"></span>${esc(m.status)}</span></td>
+        <td><div class="actions">
+          <button class="btn ghost sm" data-test="${m.id}">Test</button>
+          <button class="btn ${m.enabled?'ghost':'primary'} sm" data-tog="${m.id}" data-en="${!m.enabled}">${m.enabled?'Disable':'Enable'}</button>
+        </div></td>`;
+      tb.appendChild(tr);
+    }
+    tb.querySelectorAll('[data-test]').forEach(b => b.onclick = async () => {
+      b.textContent = 'Testing…'; await api(`/mcp/${b.dataset.test}/test`, { method: 'POST' }); loadMcp();
+    });
+    tb.querySelectorAll('[data-tog]').forEach(b => b.onclick = async () => {
+      await api(`/mcp/${b.dataset.tog}?enabled=${b.dataset.en}`, { method: 'PATCH' }); loadMcp();
+    });
+  }
+  document.getElementById('addMcp').onclick = async () => {
+    const body = { name: mName.value, kind: mKind.value, transport: mTransport.value,
+      endpoint: mEndpoint.value || null, auth_ref: mAuthRef.value || null, enabled: false };
+    if (!body.name) return;
+    await api('/mcp', { method: 'POST', body: JSON.stringify(body) });
+    mName.value = mEndpoint.value = mAuthRef.value = ''; loadMcp();
+  };
+
+  // ---------- Skills ----------
+  async function loadSkills() {
+    const tb = tbody('#skillTbl'); tb.innerHTML = '';
+    let rows = [];
+    try { rows = await (await api('/skills')).json(); } catch (e) {}
+    document.getElementById('skillCount').textContent = `${rows.length} registered`;
+    for (const s of rows) {
+      const kindPill = s.kind === 'test' ? 'ai' : s.kind === 'builtin' ? 'neutral' : 'ok';
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td><b>${esc(s.name)}</b><div class="sub">${esc(s.description)}</div></td>
+        <td><span class="pill ${kindPill}">${esc(s.kind)}</span></td>
+        <td class="note">${esc(s.trigger)}</td>
+        <td>${s.enabled ? '<span class="pill ok"><span class="d"></span>on</span>' : '<span class="pill neutral">off</span>'}</td>
+        <td><div class="actions">
+          ${s.kind==='test' ? `<button class="btn ghost sm" data-run="${s.id}">Run test</button>` : ''}
+          <button class="btn ${s.enabled?'ghost':'primary'} sm" data-stog="${s.id}" data-en="${!s.enabled}">${s.enabled?'Disable':'Enable'}</button>
+        </div></td>`;
+      tb.appendChild(tr);
+    }
+    tb.querySelectorAll('[data-run]').forEach(b => b.onclick = async () => {
+      const out = await (await api(`/skills/${b.dataset.run}/run?message=ping`, { method: 'POST' })).json();
+      const o = document.getElementById('runOut');
+      o.textContent = JSON.stringify(out, null, 2); o.classList.add('show');
+    });
+    tb.querySelectorAll('[data-stog]').forEach(b => b.onclick = async () => {
+      await api(`/skills/${b.dataset.stog}?enabled=${b.dataset.en}`, { method: 'PATCH' }); loadSkills();
+    });
+  }
+  document.getElementById('addSkill').onclick = async () => {
+    const body = { name: sName.value, kind: sKind.value, trigger: sTrigger.value || null,
+                   description: sDesc.value || sName.value, enabled: true };
+    if (!body.name) return;
+    await api('/skills', { method: 'POST', body: JSON.stringify(body) });
+    sName.value = sTrigger.value = sDesc.value = ''; loadSkills();
+  };
+
+  // ---------- Backbone health (bus + deps) ----------
+  async function loadHealth() {
+    try {
+      const h = await (await fetch('/readyz')).json();
+      const p = document.getElementById('busPill');
+      const up = h.checks?.redis;
+      p.className = 'pill ' + (up ? 'ok' : 'warn');
+      p.innerHTML = `<span class="d"></span>${esc(h.bus?.backend || 'bus')} · depth ${h.bus?.depth ?? '–'}`;
+    } catch (e) {}
+  }
+
+  loadMcp(); loadSkills(); loadHealth();
+</script>
+</body>
+</html>

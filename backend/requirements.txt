@@ -6,3 +6,6 @@ pydantic==2.10.4
 pydantic-settings==2.7.1
 httpx==0.28.1
 redis==5.2.1
+langfuse==2.57.0
+# Kafka backend (only needed when BUS_BACKEND=kafka — scale phase):
+# aiokafka==0.12.0

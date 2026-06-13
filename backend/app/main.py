@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import get_settings
 from .db import close_pool, init_pool
-from .routers import chat, clients, health, opportunities, tickets, today, visits
+from .routers import admin_api, chat, clients, health, opportunities, tickets, today, visits
 
 log = logging.getLogger("maria.api")
 
@@ -56,7 +56,7 @@ async def security_headers(request: Request, call_next):
 
 
 for r in (health.router, today.router, clients.router, visits.router,
-          opportunities.router, tickets.router, chat.router):
+          opportunities.router, tickets.router, chat.router, admin_api.router):
     app.include_router(r)
 
 # Admin / config + workflow-workload UI (served only behind auth at the ingress).

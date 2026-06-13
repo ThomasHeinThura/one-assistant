@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
+from .. import redis_client
+from ..bus import get_bus
 from ..config import get_settings
 from ..db import pool
 from ..integrations.qdrant import QdrantAdapter
@@ -28,5 +30,7 @@ async def readyz() -> dict:
     except Exception:
         checks["postgres"] = False
     checks["qdrant"] = await QdrantAdapter(settings).healthy()
+    checks["redis"] = await redis_client.ping()
+    bus_depth = await get_bus(settings).depth()
     ready = checks["postgres"]  # Postgres is the only hard dependency for readiness
-    return {"ready": ready, "checks": checks}
+    return {"ready": ready, "checks": checks, "bus": {"backend": settings.bus_backend, "depth": bus_depth}}

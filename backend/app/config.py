@@ -20,12 +20,20 @@ class Settings(BaseSettings):
     # Postgres (system of record)
     database_url: str = Field(default="postgresql://maria:maria@db:5432/maria")
 
-    # Redis (queues, locks, idempotency)
+    # Redis (locks, idempotency, cache, and the default message bus)
     redis_url: str = Field(default="redis://redis:6379/0")
+
+    # Message bus / store. "redis_streams" (default, MVP) or "kafka" (scale phase).
+    bus_backend: str = Field(default="redis_streams")  # redis_streams | kafka
+    bus_stream: str = Field(default="maria.events")    # stream / topic name
+    bus_group: str = Field(default="maria.workers")    # consumer group
+    kafka_bootstrap: str = Field(default="")           # only used when bus_backend=kafka
 
     # Qdrant (RAG)
     qdrant_url: str = Field(default="http://qdrant:6333")
     qdrant_collection: str = Field(default="maria_rag")
+    embedding_dim: int = Field(default=768)            # Gemma-class embedding size
+    cloud_embeddings: bool = Field(default=False)      # Tier-1 must use on-device/self-hosted only
 
     # API auth — the mobile app sends a bearer token. Rotate via secret store.
     api_token: str = Field(default="")  # MUST be set in staging/prod
