@@ -70,6 +70,10 @@ services:
     <<: *restart
     command: ["python", "-m", "app.workers"]
     env_file: .env
+    # The worker runs no HTTP server, so the image's :8000 healthcheck never passes.
+    # Disable it (liveness is implicit via restart policy + outbox progress).
+    healthcheck:
+      disable: true
     depends_on:
       db: { condition: service_healthy }
       redis: { condition: service_healthy }
