@@ -49,9 +49,17 @@
 
 | Concern | Choice | Notes |
 |---|---|---|
-| Containers | **Docker Compose** | Postgres, Qdrant, Redis, Langfuse, gateway, dashboard |
-| Ingress | **Cloudflare Tunnel** (cloudflared) | From `personal_ai`; no open inbound ports |
+| Containers | **Docker Compose** | Postgres, Qdrant, Redis, api, worker (message bus = Redis Streams) |
+| Edge / ingress | **Traefik v3** | Reverse proxy + TLS; replaces host nginx. Routes `<svc>.technexus.info` by Docker labels on a shared `web` network |
+| TLS certs | **Let's Encrypt** (HTTP-01) | `.well-known/acme-challenge` on :80; auto-renew |
+| DNS | **Cloudflare** | A records (DNS-only/grey) → Azure VM public IP `4.194.153.78` |
+| Management UI | **Dockge** | Web UI to manage compose stacks (`dockge.technexus.info`) |
+| Host | **Azure VM** (Ubuntu 24.04, 4 vCPU/8 GiB) | Coexists with Outline VPN (`shadowbox`) — untouched |
+| Tracing | **Langfuse Cloud** | Self-hosted v3 too heavy (~16 GiB); tracer no-ops until keys set |
 | Backups | encrypted cron | Daily, retained 30 days |
+
+> Deploy guide: [`deploy/vm/README.md`](../deploy/vm/README.md). Azure Container Apps
+> path (alt): [`deploy/azure/README.md`](../deploy/azure/README.md).
 
 ## Integrations
 

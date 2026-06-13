@@ -1,0 +1,21 @@
+# Production override: put the API behind Traefik on the shared `web` network.
+# Local dev uses docker-compose.yml alone (host port 8000). On the VM:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# Routed at https://api.technexus.info by the edge stack (deploy/vm). Certs via
+# Traefik Let's Encrypt (HTTP-01). The api keeps the default network too so it can
+# still reach db/redis/qdrant.
+services:
+  api:
+    networks: [default, web]
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.mariaapi.rule=Host(`api.technexus.info`)
+      - traefik.http.routers.mariaapi.entrypoints=websecure
+      - traefik.http.routers.mariaapi.tls.certresolver=le
+      - traefik.http.services.mariaapi.loadbalancer.server.port=8000
+
+networks:
+  web:
+    external: true

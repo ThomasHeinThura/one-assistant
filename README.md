@@ -73,9 +73,19 @@ one-assistant/
 │   ├── 06-workflows.md  # deal lifecycle + per-module state machines + orchestration
 │   ├── 07-datastore.md  # DB/RAG/Redis stores, workload distribution, verify + reindex
 │   └── 08-mobile-ux.md  # mobile gestures & QoL (mostly final native app)
-└── ui/
-    └── index.html       # single-file UI/UX sample (no build step)
+├── ui/
+│   └── index.html       # single-file UI/UX sample (no build step)
+├── backend/             # FastAPI CRM + AI gateway, workers, Docker Compose
+├── mobile/              # native iOS app (Swift / SwiftUI) scaffold
+├── deploy/
+│   ├── vm/              # Traefik + Dockge edge stack for the Azure VM (prod)
+│   └── azure/           # Azure Container Apps (Bicep) alternative
+└── SECURITY.md          # security baseline (tiers, CVE/CIS, secrets)
 ```
+
+> **Deployed:** Azure VM behind **Traefik** (TLS via Let's Encrypt) with **Dockge**
+> for management; services at `<svc>.technexus.info` via Cloudflare DNS. See
+> [deploy/vm/README.md](deploy/vm/README.md).
 
 ## Quickstart (planned)
 

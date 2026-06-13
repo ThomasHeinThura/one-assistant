@@ -1,0 +1,71 @@
+# Edge stack for the Azure VM: Traefik (reverse proxy + Let's Encrypt) + Dockge
+# (compose management UI). Replaces the host nginx. Apps attach to the external
+# `web` network and are routed by Traefik via Docker labels.
+#
+#   docker network create web        # once
+#   docker compose up -d             # from deploy/vm/
+#
+# Certs: HTTP-01 (.well-known/acme-challenge) on :80. Requires Azure NSG to allow
+# inbound 80 + 443 and Cloudflare A records (DNS-only) for *.technexus.info.
+name: maria-edge
+
+networks:
+  web:
+    external: true
+
+volumes:
+  letsencrypt:
+
+services:
+  traefik:
+    image: traefik:v3.2
+    restart: unless-stopped
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=web
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      # Force HTTPS: redirect all :80 -> :443
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      # Let's Encrypt via HTTP-01 challenge (.well-known)
+      - --certificatesresolvers.le.acme.httpchallenge=true
+      - --certificatesresolvers.le.acme.httpchallenge.entrypoint=web
+      - --certificatesresolvers.le.acme.email=${ACME_EMAIL}
+      - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json
+      # Dashboard on :8080, bound to localhost only (reach via SSH tunnel)
+      - --api.dashboard=true
+      - --api.insecure=true
+      - --log.level=INFO
+      - --accesslog=true
+    ports:
+      - "80:80"
+      - "443:443"
+      - "127.0.0.1:8080:8080"   # dashboard: ssh -L 8080:127.0.0.1:8080
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - letsencrypt:/letsencrypt
+    networks: [web]
+    # Hardened: drop all caps, re-add only privileged-port binding.
+    cap_drop: ["ALL"]
+    cap_add: ["NET_BIND_SERVICE"]
+    security_opt: ["no-new-privileges:true"]
+
+  dockge:
+    image: louislam/dockge:1
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./dockge/data:/app/data
+      - /opt/stacks:/opt/stacks
+    environment:
+      - DOCKGE_STACKS_DIR=/opt/stacks
+    networks: [web]
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.dockge.rule=Host(`dockge.${DOMAIN}`)
+      - traefik.http.routers.dockge.entrypoints=websecure
+      - traefik.http.routers.dockge.tls.certresolver=le
+      - traefik.http.services.dockge.loadbalancer.server.port=5001
+    security_opt: ["no-new-privileges:true"]
