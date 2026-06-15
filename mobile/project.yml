@@ -8,9 +8,10 @@ options:
   createIntermediateGroups: true
 
 packages:
+  # Vendored + trimmed LLM.swift (llama.cpp). Local path → no network at build
+  # time, no swift-syntax/macro deps. Fetch it once with: ./setup-ondevice.sh
   LLM:
-    url: https://github.com/eastriverlee/LLM.swift
-    from: "2.1.0"
+    path: Vendor/LLM.swift
 
 targets:
   MariaOne:

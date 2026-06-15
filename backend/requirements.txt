@@ -7,5 +7,7 @@ pydantic-settings==2.7.1
 httpx==0.28.1
 redis==5.2.1
 langfuse==2.57.0
+# Self-hosted embeddings for RAG (ONNX, no torch, no cloud) — Tier-2/3 indexing.
+fastembed==0.5.1
 # Kafka backend (only needed when BUS_BACKEND=kafka — scale phase):
 # aiokafka==0.12.0

@@ -16,6 +16,7 @@ from pydantic import BaseModel
 from ..config import get_settings
 from ..db import pool
 from ..integrations import openrouter
+from ..integrations.qdrant import QdrantAdapter
 from ..security import require_auth
 
 log = logging.getLogger("maria.chat")
@@ -36,8 +37,14 @@ SYSTEM = (
 )
 
 
-async def _context() -> tuple[str, list[dict]]:
-    """Compact live snapshot of the CRM for grounding + structured sources."""
+async def _context(question: str, settings) -> tuple[str, list[dict]]:
+    """Grounding context for the question: a compact live CRM snapshot PLUS the
+    top RAG passages retrieved from Qdrant for this specific question.
+
+    RAG is fail-soft — if Qdrant or the embedder is unavailable, we still return
+    the live snapshot so the endpoint always has something to ground on. Tier-2
+    only: Tier-1 content is never indexed server-side.
+    """
     p = pool()
     clients = await p.fetchval("SELECT count(*) FROM clients")
     visits = await p.fetchval("SELECT count(*) FROM visits")
@@ -57,6 +64,16 @@ async def _context() -> tuple[str, list[dict]]:
         "open_todos: " + ("; ".join(r["title"] for r in todos) if todos else "none"),
     ]
     sources = [dict(r) for r in at_risk]
+
+    # Semantic retrieval over indexed CRM records (Tier-2 RAG).
+    hits = await QdrantAdapter(settings).search(question, limit=4, tier=2)
+    if hits:
+        lines.append("\nRELEVANT RECORDS (retrieved):")
+        for h in hits:
+            if h.get("text"):
+                lines.append(f"- {h['text']}")
+        sources += [{"source_id": h.get("source_id"), "score": h.get("score")} for h in hits]
+
     return "\n".join(lines), sources
 
 
@@ -76,7 +93,7 @@ async def _skill_prompt(slug: str | None) -> str | None:
 @router.post("")
 async def ask(body: Ask) -> dict:
     settings = get_settings()
-    context, sources = await _context()
+    context, sources = await _context(body.question, settings)
 
     # Prefer the key stored on the OpenRouter integration row, else the env key.
     orow = await pool().fetchrow("SELECT env FROM mcp_integrations WHERE name='OpenRouter'")

@@ -22,97 +22,139 @@ final class TodayModel: ObservableObject {
 }
 
 struct TodayView: View {
+    @Binding var subtitle: String
+    var openChat: () -> Void
     @StateObject private var model = TodayModel()
-    @State private var showSettings = false
 
     var body: some View {
-        NavigationStack {
-            Group {
-                switch model.state {
-                case .loading:
-                    ProgressView("Loading…").frame(maxWidth: .infinity, maxHeight: .infinity)
-                case .needsToken:
-                    StatusView(icon: "key.fill", title: "Connect to your backend",
-                               message: "Add your API token to load Maria's brief.",
-                               actionTitle: "Open Settings") { showSettings = true }
-                case .error(let msg):
-                    StatusView(icon: "wifi.exclamationmark", title: "Couldn't load",
-                               message: msg, actionTitle: "Retry") { Task { await model.load() } }
-                case .empty:
-                    StatusView(icon: "checkmark.circle", title: "All clear",
-                               message: "No to-dos or visits for today.", actionTitle: nil, action: {})
-                case .loaded:
-                    briefList
-                }
-            }
-            .navigationTitle("Today")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { showSettings = true } label: { Image(systemName: "gearshape") }
-                }
-            }
-            .refreshable { await model.load() }
-            .task { await model.load() }
-            .sheet(isPresented: $showSettings) {
-                SettingsView { Task { await model.load() } }
+        ScreenScroll {
+            switch model.state {
+            case .loading:
+                ProgressView("Loading…").frame(maxWidth: .infinity).padding(.top, 60)
+            case .needsToken:
+                StatusBlock(icon: "key.fill", title: "Connect to your backend",
+                            message: "Add your API token in Settings to load Maria's brief.")
+            case .error(let msg):
+                StatusBlock(icon: "wifi.exclamationmark", title: "Couldn't load", message: msg,
+                            actionTitle: "Retry") { Task { await model.load() } }
+            case .empty:
+                StatusBlock(icon: "checkmark.circle", title: "All clear",
+                            message: "No to-dos or visits for today.")
+            case .loaded:
+                loaded
             }
         }
+        .task {
+            await model.load()
+            subtitle = subtitleText
+        }
+        .refreshable { await model.load(); subtitle = subtitleText }
     }
 
-    private var briefList: some View {
-        List {
-            if let g = model.brief?.glance {
-                Section("Maria's daily brief") {
-                    HStack {
-                        stat("\(g.visits_today)", "Visits")
-                        stat("\(g.tickets_to_action)", "To action")
-                        stat("\(g.healthy_deals)", "Healthy")
-                        stat("\(g.at_risk_deals)", "At-risk")
-                    }
-                }
+    private var subtitleText: String {
+        guard let g = model.brief?.glance else { return "Your sales & solution copilot" }
+        let n = (model.brief?.todos.count ?? 0)
+        return "\(g.visits_today) visits · Maria has \(n) things for you"
+    }
+
+    @ViewBuilder private var loaded: some View {
+        let g = model.brief?.glance
+        LiveBanner(text: "Maria is following up on \(model.brief?.todos.count ?? 0) items across your CRM, visits and tickets.")
+
+        AIBrief(tag: "Daily brief", orchestrating: true) {
+            Text(briefText).font(.system(size: 13.5)).foregroundStyle(Color(hex: 0x2c3a52))
+        }
+
+        if let g {
+            HStack(spacing: 10) {
+                StatCard(value: "\(g.visits_today)", label: "Visits today")
+                StatCard(value: "\(g.tickets_to_action)", label: "Tickets to action", tint: .risk)
+                StatCard(value: "\(g.healthy_deals)", label: "Healthy deals", tint: .ok)
             }
-            Section("My to-do · AI-prioritised") {
-                if (model.brief?.todos ?? []).isEmpty {
-                    Text("Nothing queued.").foregroundStyle(.secondary)
-                }
-                ForEach(model.brief?.todos ?? []) { todo in
-                    HStack {
-                        Image(systemName: todo.status == "done" ? "checkmark.square.fill" : "square")
-                            .foregroundStyle(todo.status == "done" ? .green : .secondary)
-                        Text(todo.title)
-                        Spacer()
-                        if todo.source == "ai" {
-                            Text("Maria").font(.caption2).padding(.horizontal, 6).padding(.vertical, 2)
-                                .background(.purple.opacity(0.15), in: Capsule())
-                        }
-                    }
+        }
+
+        Eyebrow(text: "My to-do · AI-prioritised")
+        MariaCard {
+            let todos = model.brief?.todos ?? []
+            if todos.isEmpty {
+                Text("Nothing queued.").font(.system(size: 14)).foregroundStyle(Color.muted)
+            } else {
+                ForEach(Array(todos.enumerated()), id: \.element.id) { idx, todo in
+                    TodoRow(todo: todo)
+                    if idx < todos.count - 1 { Divider().background(Color.line) }
                 }
             }
         }
+
+        SuggestionCard(text: "A deal has had no touch in 21 days. Log a check-in or I can draft a nudge email.",
+                       action: "Act ›", onTap: openChat)
     }
 
-    private func stat(_ n: String, _ l: String) -> some View {
-        VStack(spacing: 2) { Text(n).font(.title3.bold()); Text(l).font(.caption2).foregroundStyle(.secondary) }
-            .frame(maxWidth: .infinity)
+    private var briefText: String {
+        guard let g = model.brief?.glance else { return "Loading your day…" }
+        var s = "\(g.visits_today) visit(s) today. "
+        if g.at_risk_deals > 0 { s += "\(g.at_risk_deals) deal(s) look at-risk. " }
+        if g.tickets_to_action > 0 { s += "\(g.tickets_to_action) ticket(s) need triage. " }
+        s += "I drafted your follow-ups and a sub-agent is preparing quotations."
+        return s
     }
 }
 
-/// Reusable empty/error/needs-token state.
-struct StatusView: View {
-    let icon: String, title: String, message: String
-    let actionTitle: String?
-    let action: () -> Void
+// MARK: - Todo row
+
+struct TodoRow: View {
+    let todo: Todo
+    @State private var done: Bool = false
 
     var body: some View {
-        VStack(spacing: 14) {
-            Image(systemName: icon).font(.system(size: 40)).foregroundStyle(.secondary)
-            Text(title).font(.headline)
-            Text(message).font(.subheadline).foregroundStyle(.secondary)
-                .multilineTextAlignment(.center).padding(.horizontal, 32)
-            if let actionTitle {
-                Button(actionTitle, action: action).buttonStyle(.borderedProminent)
+        HStack(spacing: 12) {
+            Button { done.toggle() } label: {
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(done ? Color.navy500 : Color.clear)
+                    .frame(width: 20, height: 20)
+                    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(done ? Color.navy500 : Color.navy300, lineWidth: 2))
+                    .overlay(done ? Image(systemName: "checkmark").font(.system(size: 11, weight: .bold)).foregroundStyle(.white) : nil)
+            }.buttonStyle(.plain)
+            Text(todo.title).font(.system(size: 14))
+                .strikethrough(done, color: .muted)
+                .foregroundStyle(done ? Color.muted : Color.ink)
+            Spacer(minLength: 6)
+            if todo.source == "ai" {
+                Chip(text: "Maria drafted", style: .ai)
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.vertical, 2)
+        .onAppear { done = todo.status == "done" }
+    }
+}
+
+// MARK: - Shared scroll container + status block
+
+struct ScreenScroll<Content: View>: View {
+    @ViewBuilder var content: Content
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) { content }
+                .padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 120)
+        }
+        .background(Color.appBG)
+    }
+}
+
+struct StatusBlock: View {
+    let icon: String, title: String, message: String
+    var actionTitle: String? = nil
+    var action: (() -> Void)? = nil
+    var body: some View {
+        VStack(spacing: 14) {
+            Image(systemName: icon).font(.system(size: 40)).foregroundStyle(Color.muted)
+            Text(title).font(.headline)
+            Text(message).font(.subheadline).foregroundStyle(Color.muted)
+                .multilineTextAlignment(.center)
+            if let actionTitle, let action {
+                Button(actionTitle, action: action).buttonStyle(.borderedProminent).tint(.navy700)
+            }
+        }
+        .frame(maxWidth: .infinity).padding(.top, 60).padding(.horizontal, 24)
     }
 }

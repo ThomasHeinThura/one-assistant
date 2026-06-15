@@ -70,12 +70,58 @@ async def relay_loop(bus) -> None:
 
 
 # ------------------------------------------------------------------- handlers
+# How to turn each aggregate into a searchable text blob + its sensitivity tier.
+# Tier-1 (confidential) rows are NOT indexed server-side — that content stays on
+# the device. We skip them here as a defence-in-depth backstop.
+_RECORD_SQL: dict[str, str] = {
+    "opportunity": """SELECT o.title, o.stage, o.health, o.status, o.pipeline_value_usd,
+                             o.description, c.name AS client, 2 AS tier
+                      FROM opportunities o JOIN clients c ON c.id=o.client_id WHERE o.id=$1""",
+    "ticket": """SELECT t.title, t.type, t.status, t.priority, t.description,
+                        c.name AS client, 2 AS tier
+                 FROM tickets t LEFT JOIN clients c ON c.id=t.client_id WHERE t.id=$1""",
+    "client": "SELECT name, account_type, status, notes, 2 AS tier FROM clients WHERE id=$1",
+    "visit": """SELECT v.title, v.status, v.location, c.name AS client, v.sensitivity_tier AS tier
+                FROM visits v JOIN clients c ON c.id=v.client_id WHERE v.id=$1""",
+    "mom": """SELECT m.discussion, m.status, c.name AS client, m.sensitivity_tier AS tier
+              FROM meeting_minutes m JOIN visits v ON v.id=m.visit_id
+              JOIN clients c ON c.id=v.client_id WHERE m.id=$1""",
+}
+
+
+async def _record_text(aggregate: str, aggregate_id: str) -> tuple[str, int] | None:
+    """Fetch a human-readable text blob + sensitivity tier for one record."""
+    sql = _RECORD_SQL.get(aggregate)
+    if not sql:
+        return None
+    row = await pool().fetchrow(sql, aggregate_id)
+    if not row:
+        return None
+    d = dict(row)
+    tier = int(d.pop("tier", 2) or 2)
+    parts = [f"{aggregate.title()}"]
+    for k, v in d.items():
+        if v not in (None, "", 0):
+            parts.append(f"{k}: {v}")
+    return " | ".join(parts), tier
+
+
 async def reindex(settings, aggregate: str, aggregate_id: str, span) -> None:
-    """Embed the changed record into Qdrant (RAG). Tier-aware embedding backend."""
+    """Embed the changed record into Qdrant (RAG). Tier-aware embedding backend.
+
+    Tier-1 confidential rows are skipped server-side (they live only on-device).
+    """
+    info = await _record_text(aggregate, aggregate_id)
+    if info is None:
+        span.event("reindex.skip", {"id": aggregate_id, "reason": "no text"})
+        return
+    text, tier = info
+    if tier == 1:
+        span.event("reindex.skip", {"id": aggregate_id, "reason": "tier-1 stays on-device"})
+        return
     qd = QdrantAdapter(settings)
-    # In M2 we fetch the record text + tier from Postgres; skeleton uses a placeholder.
-    wrote = await qd.upsert(source_id=aggregate_id, text=f"{aggregate}:{aggregate_id}",
-                            tier=2, payload={"aggregate": aggregate})
+    wrote = await qd.upsert(source_id=f"{aggregate}:{aggregate_id}", text=text,
+                            tier=tier, payload={"aggregate": aggregate})
     span.event("reindex.qdrant", {"id": aggregate_id, "written": wrote})
 
 

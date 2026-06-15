@@ -28,8 +28,10 @@ jobs:
       - run: pip-audit -r backend/requirements.txt
 
       # Filesystem scan: deps + leaked secrets + IaC misconfig. Fail on HIGH/CRITICAL.
+      # Pinned to 0.35.0+ — the Mar-2026 supply-chain incident force-pushed malware
+      # to all tags < 0.35.0 (GHSA / Dependabot alert). 0.35.0 is the clean release.
       - name: Trivy filesystem scan
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           scan-type: fs
           scan-ref: .
@@ -44,7 +46,7 @@ jobs:
       - uses: actions/checkout@v4
       - run: docker build -t maria-one-api:ci backend
       - name: Trivy image scan
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           scan-type: image
           image-ref: maria-one-api:ci

@@ -20,7 +20,9 @@ from pydantic import BaseModel, Field
 from ..config import get_settings
 from ..db import pool, tx
 from ..integrations import openrouter
+from ..integrations.qdrant import QdrantAdapter
 from ..security import require_auth
+from ..workers import _RECORD_SQL, _record_text
 
 router = APIRouter(prefix="/admin/api", tags=["admin"], dependencies=[Depends(require_auth)])
 
@@ -251,6 +253,69 @@ async def test_mcp(mcp_id: UUID) -> dict:
 @router.delete("/mcp/{mcp_id}", status_code=204)
 async def delete_mcp(mcp_id: UUID):
     await pool().execute("DELETE FROM mcp_integrations WHERE id=$1", mcp_id)
+
+
+# -------------------------------------------------------------------------- RAG
+# The aggregate → table map for backfill. Each id column is the PK of that table.
+_RAG_SOURCES = {
+    "opportunity": "SELECT id FROM opportunities",
+    "ticket": "SELECT id FROM tickets",
+    "client": "SELECT id FROM clients",
+    # Tier-1 visits/MoMs are filtered inside _record_text/reindex (they return tier).
+    "visit": "SELECT id FROM visits",
+    "mom": "SELECT id FROM meeting_minutes",
+}
+
+
+@router.get("/rag/status")
+async def rag_status() -> dict:
+    """Qdrant health + indexed point count, so the console can show RAG state."""
+    settings = get_settings()
+    qd = QdrantAdapter(settings)
+    healthy = await qd.healthy()
+    points = None
+    try:
+        async with httpx.AsyncClient(base_url=settings.qdrant_url, timeout=10) as c:
+            r = await c.get(f"/collections/{settings.qdrant_collection}")
+            if r.status_code == 200:
+                points = r.json().get("result", {}).get("points_count")
+    except Exception:
+        pass
+    return {"healthy": healthy, "collection": settings.qdrant_collection, "points": points}
+
+
+@router.post("/rag/reindex")
+async def rag_reindex() -> dict:
+    """Backfill the vector index from Postgres (Tier-2 records only).
+
+    Walks the main aggregates and upserts each into Qdrant. Tier-1 rows are
+    skipped (their tier is read inside _record_text). Fail-soft per record.
+    """
+    settings = get_settings()
+    qd = QdrantAdapter(settings)
+    await qd.ensure_collection()
+    indexed, skipped, errors = 0, 0, 0
+    for aggregate, sql in _RAG_SOURCES.items():
+        if aggregate not in _RECORD_SQL:
+            continue
+        for row in await pool().fetch(sql):
+            agg_id = str(row["id"])
+            try:
+                info = await _record_text(aggregate, agg_id)
+                if info is None:
+                    skipped += 1
+                    continue
+                text, tier = info
+                if tier == 1:
+                    skipped += 1
+                    continue
+                wrote = await qd.upsert(source_id=f"{aggregate}:{agg_id}", text=text,
+                                        tier=tier, payload={"aggregate": aggregate})
+                indexed += 1 if wrote else 0
+                skipped += 0 if wrote else 1
+            except Exception:
+                errors += 1
+    return {"indexed": indexed, "skipped": skipped, "errors": errors}
 
 
 # ----------------------------------------------------------------------- Skills

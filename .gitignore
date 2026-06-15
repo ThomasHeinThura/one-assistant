@@ -57,3 +57,7 @@ Thumbs.db
 # Swift build outputs
 mobile/out/
 mobile/build/
+
+# ---- Vendored on-device model engine (large prebuilt binary; never commit) ----
+# Fetched + trimmed by mobile/setup-ondevice.sh — see that script.
+mobile/Vendor/
