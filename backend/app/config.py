@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     qdrant_url: str = Field(default="http://qdrant:6333")
     qdrant_collection: str = Field(default="maria_rag")
     embedding_dim: int = Field(default=768)            # Gemma-class embedding size
-    cloud_embeddings: bool = Field(default=False)      # Tier-1 must use on-device/self-hosted only
+    cloud_embeddings: bool = Field(default=False)      # keep self-hosted embeddings; Tier-1 excluded from RAG
 
     # API auth — the mobile app sends a bearer token. Rotate via secret store.
     api_token: str = Field(default="")  # MUST be set in staging/prod
@@ -41,16 +41,16 @@ class Settings(BaseSettings):
     # CORS — exact origins only; never "*" in prod.
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
 
-    # OpenRouter (Tier 2/3 cloud LLM only — Tier 1 never leaves the device)
-    openrouter_api_key: str = Field(default="")
-    openrouter_base_url: str = Field(default="https://openrouter.ai/api/v1")
-    # openrouter/free is a router that picks an available free model per request —
-    # it sidesteps single-model upstream throttling. Falls back to a pinned free
-    # model. NOTE: the OpenRouter account still has a free-tier daily cap (50/day;
-    # a one-time $10 deposit raises it to 1000/day). On-device is the unlimited path.
-    openrouter_models: list[str] = Field(
-        default_factory=lambda: ["openrouter/free", "google/gemma-4-26b-a4b-it:free"]
-    )
+    # Ollama Cloud (Tier 2/3 cloud LLM only — Tier 1 never leaves the device).
+    # OpenAI-compatible endpoint; auth is a Bearer API key. Ollama's cloud does not
+    # retain or train on prompts (privacy parity with the old data_collection:deny).
+    ollama_api_key: str = Field(default="")
+    ollama_base_url: str = Field(default="https://ollama.com/v1")
+    # The only AI engine (the on-device/SLM path was removed). On the paid "Pro"
+    # plan, gemma4:31b and additional models (deepseek, gpt-oss, ...) are available
+    # behind one key with no free-tier caps. Add more ids here to enable fallback/
+    # routing across cloud models.
+    ollama_models: list[str] = Field(default_factory=lambda: ["gemma4:31b"])
 
     # External integrations (service credentials — NOT interactive MCP; see audit item #5)
     plane_base_url: str = Field(default="")

@@ -1,6 +1,6 @@
 # Maria One — Project Status
 
-_Last updated: 2026-06-13_
+_Last updated: 2026-06-17_
 
 Sales & solution work assistant with AI coordinator **Maria** — a native iOS app
 (Today / VisitPlan / CRM / Tickets) + FastAPI backend that coordinates an in-house
@@ -20,7 +20,9 @@ CRM (Postgres), Plane (tickets), Notion (notes), and RAG (Qdrant).
 - [x] Postgres schema (migrations 001–007): clients, contacts, visits (sensitivity tier + GPS),
       agenda, meeting minutes, action items, opportunities, tickets, outbox, todos.
 - [x] Transactional outbox → Redis Streams bus → worker dispatch (idempotent, per-entity locks).
-- [x] Tier-1 cloud guard (fail-closed 422) — confidential content never leaves the device.
+- [x] Sensitivity tier captured as a classification/audit label (carried into traces). All AI runs
+      in the cloud via Ollama Cloud — there is no on-device path, so the old Tier-1 cloud guard /
+      on-device guarantee has been removed.
 - [x] Bearer-token auth; security headers; strict CORS.
 - [x] **Username/password login** (`/auth/login`) — operator `thomas`; console fetches the
       bearer token after sign-in (no hand-pasted tokens). pbkdf2-sha256, stdlib only.
@@ -28,14 +30,15 @@ CRM (Postgres), Plane (tickets), Notion (notes), and RAG (Qdrant).
 ### Integrations (all connected & verified live 2026-06-13)
 - [x] **Plane** — `https://plane.bimats.com`, workspace `bimdevops` → **24 projects**. Key stored in DB.
 - [x] **Notion** — internal integration → **52 databases** accessible. Token stored in DB.
-- [x] **OpenRouter** — key valid (free tier, 10/mo). `data_collection: deny` enforced.
+- [x] **Ollama Cloud** — paid "Pro" plan; key valid. `gemma4:31b` via `https://ollama.com/v1`
+      (Bearer `OLLAMA_API_KEY`). No logging, no training on prompts.
 - [x] Admin "Test" buttons do **real** REST checks and report counts (projects / databases).
 
 ### AI / Models
-- [x] Model registry (migration 006): on-device Gemma 2B + 2 OpenRouter Gemma 4 models.
-- [x] Per-model "Test" → on-device noted; OpenRouter pinged live (3/3 ready).
-- [x] **Maria chat is real** — `/chat` builds a live CRM snapshot and answers via OpenRouter
-      (pinned no-logging chain), with a deterministic DB fallback if the cloud is down.
+- [x] Model registry: `gemma4:31b` served via Ollama Cloud (cloud-only; no on-device model).
+- [x] Per-model "Test" → Ollama Cloud pinged live (ready).
+- [x] **Maria chat is real** — `/chat` builds a live CRM snapshot and answers via Ollama Cloud
+      (`gemma4:31b`), with a deterministic DB fallback if the cloud is down.
 
 ### Admin console (`/admin`)
 - [x] Enterprise UI: sidebar nav, KPI cards, MCP / Skills / AI & Models / Workflow pages.
@@ -61,7 +64,7 @@ CRM (Postgres), Plane (tickets), Notion (notes), and RAG (Qdrant).
 
 - [ ] **Mobile UI restyle** to match `ui/index.html` (navy gradient header, Maria AI-brief card,
       stat cards, to-do chips, purple FAB chat). _Scaffold styled but not yet pixel-matched._
-- [ ] **In-app model test** surface (on-device Gemma 2B + OpenRouter) in Settings.
+- [ ] **In-app model test** surface (Ollama Cloud `gemma4:31b`) in Settings.
 
 ## 🗓️ Later (team phase)
 - [ ] Microsoft Entra ID (PKCE) login + RBAC — replaces the single shared token.
@@ -73,8 +76,12 @@ CRM (Postgres), Plane (tickets), Notion (notes), and RAG (Qdrant).
 ---
 
 ## ⚠️ Notes / risks
-- OpenRouter free tier is **10 requests/month** — chat will throttle quickly; add credits or a
-  paid key for real usage. Tier-1 (confidential) drafting must stay on-device regardless.
+- On the paid Ollama Cloud "Pro" plan the free-tier rate caps are removed; additional models
+  (deepseek, gpt-oss, etc.) are available behind the same key. All AI is cloud-side — there is no
+  on-device fallback if Ollama Cloud is unreachable (the deterministic DB fallback covers chat only).
+- **Privacy posture change:** there is no on-device path. Confidential (Tier-1) content is drafted in
+  the cloud via Ollama Cloud (no logging, no training); the tier is now an audit label, not an
+  on-device guarantee.
 - MVP is single-user (one shared API token behind the login). Do not expose `/admin` publicly
   without the sign-in layer.
 - Secrets live in the VM `.env` and the DB (redacted on read) — never commit real keys.

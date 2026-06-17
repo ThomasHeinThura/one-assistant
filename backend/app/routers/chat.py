@@ -1,10 +1,9 @@
-"""Maria quick-chat — a real OpenRouter answer grounded in live CRM context.
+"""Maria quick-chat — a real Ollama Cloud answer grounded in live CRM context.
 
 Maria pulls a compact snapshot of the CRM (counts + the most relevant rows) and
-asks the pinned no-logging cloud model (Tier 2/3) to answer in her voice. If the
-cloud is unreachable it falls back to a deterministic DB-derived answer so the
-endpoint always responds. Confidential (Tier-1) drafting stays on-device — that
-path runs in the iOS app, never here.
+asks the pinned cloud model to answer in her voice. If the cloud is unreachable it
+falls back to a deterministic DB-derived answer so the endpoint always responds.
+All AI runs in the cloud now (Ollama Cloud); there is no on-device path.
 """
 from __future__ import annotations
 
@@ -15,7 +14,7 @@ from pydantic import BaseModel
 
 from ..config import get_settings
 from ..db import pool
-from ..integrations import openrouter
+from ..integrations import ollama
 from ..integrations.qdrant import QdrantAdapter
 from ..security import require_auth
 
@@ -95,9 +94,9 @@ async def ask(body: Ask) -> dict:
     settings = get_settings()
     context, sources = await _context(body.question, settings)
 
-    # Prefer the key stored on the OpenRouter integration row, else the env key.
-    orow = await pool().fetchrow("SELECT env FROM mcp_integrations WHERE name='OpenRouter'")
-    key = (orow["env"] or {}).get("OPENROUTER_API_KEY") if orow else None
+    # Prefer the key stored on the Ollama integration row, else the env key.
+    orow = await pool().fetchrow("SELECT env FROM mcp_integrations WHERE name='Ollama'")
+    key = (orow["env"] or {}).get("OLLAMA_API_KEY") if orow else None
 
     # A selected skill swaps in its specialised system prompt (PM / sales / etc).
     system = await _skill_prompt(body.skill) or SYSTEM
@@ -107,16 +106,17 @@ async def ask(body: Ask) -> dict:
     ]
     rate_limited = False
     try:
-        answer = await openrouter.complete(settings, messages, api_key=key, max_tokens=400)
-        return {"answer": answer, "sources": sources, "model": "openrouter", "grounded": True}
+        answer = await ollama.complete(settings, messages, api_key=key, max_tokens=400)
+        model_id = (settings.ollama_models[0] if settings.ollama_models else "ollama")
+        return {"answer": answer, "sources": sources, "model": model_id, "grounded": True}
     except Exception as exc:
         log.warning("chat cloud fallback: %s", exc)
         rate_limited = "rate_limited" in str(exc)
 
     # Deterministic fallback so the endpoint always answers, even cloud-down.
     q = body.question.lower()
-    note = (" (Maria's free cloud model is rate-limited right now — add OpenRouter credits for "
-            "always-on AI replies.)") if rate_limited else ""
+    note = (" (Maria's free cloud model hit its Ollama rate limit — retry shortly, or upgrade "
+            "the Ollama plan for always-on AI replies.)") if rate_limited else ""
     if "at-risk" in q or "at risk" in q:
         top = (" Top: " + sources[0]["title"]) if sources else ""
         return {"answer": f"{len(sources)} at-risk deal(s) right now.{top}{note}",
@@ -124,7 +124,7 @@ async def ask(body: Ask) -> dict:
     if "ticket" in q:
         return {"answer": f"I track open tickets from Plane.{note}",
                 "sources": sources, "model": "fallback", "grounded": True}
-    msg = ("Maria's free cloud model is rate-limited right now — please retry in a moment. "
-           "Add OpenRouter credits for reliable replies." if rate_limited
-           else "Maria's cloud model is unavailable — check the OpenRouter key in the admin console.")
+    msg = ("Maria's free cloud model hit its Ollama rate limit — please retry in a moment. "
+           "Upgrade the Ollama plan for reliable replies." if rate_limited
+           else "Maria's cloud model is unavailable — check the Ollama key in the admin console.")
     return {"answer": msg, "sources": sources, "model": "fallback", "grounded": False}

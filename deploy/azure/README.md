@@ -45,7 +45,7 @@ az deployment group create -g maria-one \
 ## Secrets (never in the image)
 
 Store in Key Vault, reference from Container Apps:
-`API_TOKEN`, `OPENROUTER_API_KEY`, `PLANE_API_KEY`, `NOTION_TOKEN`,
+`API_TOKEN`, `OLLAMA_API_KEY` (Ollama Cloud), `PLANE_API_KEY`, `NOTION_TOKEN`,
 `LANGFUSE_SECRET_KEY`, DB/Redis connection strings.
 
 ```bash
@@ -89,5 +89,5 @@ The MVP app stack fits comfortably in this envelope; idle usage on a dev box is
 
 - Ingress: external on `api` only; `internal` for worker/qdrant.
 - Private endpoints for Postgres + Redis; no public network access.
-- Diagnostic settings → Azure Monitor; alerts on dead-letter growth + Tier-1
-  cloud rejections.
+- Diagnostic settings → Azure Monitor; alerts on dead-letter growth + Ollama Cloud
+  errors/quota.

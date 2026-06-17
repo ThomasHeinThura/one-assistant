@@ -51,7 +51,6 @@ struct RootTabView: View {
         }
         .onAppear {
             let env = ProcessInfo.processInfo.environment
-            if env["MARIA_ONDEVICE_SELFTEST"] == "1" { showChat = true }
             // QA/screenshot helper: deep-link the initial tab (today|visit|crm|tickets).
             if let t = env["MARIA_START_TAB"], let start = Tab(rawValue: t) { tab = start }
         }

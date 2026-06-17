@@ -1,30 +1,40 @@
 # Security Baseline — Maria One
 
 Scope: the Docker/Azure backend, the iOS app, and the three external integrations
-(Plane, Notion, OpenRouter). This is the regulated baseline the build follows —
+(Plane, Notion, Ollama Cloud). This is the regulated baseline the build follows —
 mapped to OWASP ASVS, the CIS Docker Benchmark, and Azure's security baseline, with
 an explicit eye on data-breach and CVE exposure.
 
 ## 1. Data classification & the privacy tiers (the core control)
 
-The product handles **banking-client data**, so the sensitivity tier is a hard
-security boundary, not a UX nicety:
+The product handles **banking-client data**, so the sensitivity tier matters — but be
+honest about what it does now:
 
-| Tier | Data | Rule (enforced in two places) |
+**All AI runs in the cloud.** Every AI call (chat and MoM drafting) goes server-side to
+**Ollama Cloud**, which does not log or train on prompts. There is **no on-device model**
+and no on-device inference path. The previous guarantee — *"Tier-1 confidential never
+leaves the device / never goes to cloud"* — **no longer holds and has been removed.**
+Confidential data is processed in the cloud like everything else; the privacy basis is the
+provider's no-logging / no-training policy, not on-device isolation.
+
+The sensitivity tier is therefore an **advisory classification/audit label**, not a routing
+or residency guarantee:
+
+| Tier | Data | What the label does now |
 |---|---|---|
-| 🔴 1 Confidential | Banking/PII/credentials | MoM drafted **on-device only**. The app never makes a cloud LLM call; the backend **rejects** any Tier-1 cloud request (`security.assert_cloud_allowed`, fail-closed). Tier-1 embeddings must use an on-device/self-hosted model. |
-| 🟡 2 Internal | Internal/partner | Cloud allowed **only** with `data_collection: "deny"` (OpenRouter, fail-closed). |
-| 🟢 3 Public | Generic/test | Any free model. |
+| 🔴 1 Confidential | Banking/PII/credentials | Flagged for review/audit and traced; MoM is still drafted in the cloud via Ollama Cloud (no logging, no training). It does **not** keep data on-device — there is no on-device path. |
+| 🟡 2 Internal | Internal/partner | Internal classification for reporting/audit. |
+| 🟢 3 Public | Generic/test | Lowest-sensitivity marker. |
 
-**Defense in depth:** the phone decides the tier first; the server re-checks. If a
-no-logging cloud endpoint is unavailable, the request **errors** rather than
-silently downgrading (fail-closed). A scheduled job re-reads each pinned model's
-`data_policy` and alerts on change.
+The tier is set on the phone and carried through to the Langfuse trace for audit. Because
+no inference happens on the device, there is no longer a server-side "Tier-1 cloud block"
+to enforce — the residency guarantee it backed no longer exists.
 
-> **Open decision to confirm before go-live (from the pre-build audit):** does a
-> Tier-1 MoM dispatch to **Notion** (an external SaaS) at all, and is it persisted
-> server-side in Postgres/Qdrant? Recommended default: **Tier-1 stays on-device +
-> CRM-only**, no Notion fan-out, embeddings on a self-hosted model.
+> **Open decision to confirm before go-live:** for Tier-1 (banking/PII) content, decide
+> whether it is dispatched to **Notion** (an external SaaS) and how long it is persisted
+> server-side in Postgres/Qdrant. Since on-device isolation is no longer available, controls
+> for confidential data rest on: the no-logging Ollama Cloud provider, in-stack Langfuse,
+> retention limits, and (optionally) suppressing Notion fan-out for Tier-1.
 
 ## 2. Secrets
 
@@ -32,8 +42,8 @@ silently downgrading (fail-closed). A scheduled job re-reads each pinned model's
   `.env*`; only `.env.example` (placeholders) is tracked.
 - Azure: **Key Vault** + Container Apps secret references; managed identity to read
   the vault — no connection strings in app settings.
-- API token, Plane key, Notion token, OpenRouter key, Langfuse keys: rotate on a
-  schedule; revoke on staff change.
+- API token, Plane key, Notion token, Ollama Cloud key (`OLLAMA_API_KEY`), Langfuse keys:
+  rotate on a schedule; revoke on staff change.
 - iOS: bearer token in the **Keychain** (`kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`),
   never `UserDefaults`/`Info.plist`.
 
@@ -105,11 +115,12 @@ silently downgrading (fail-closed). A scheduled job re-reads each pinned model's
 ## 9. Observability & incident response
 
 - **Self-hosted Langfuse** traces every model call + dispatch (tokens, cost, tier,
-  destination) — kept in-stack, so confidential prompts are never sent to a 3rd-party
-  observability SaaS. Use it to prove Tier-1 visits never touched the cloud.
+  destination) — kept in-stack, so trace metadata stays out of a 3rd-party observability
+  SaaS. Use it to audit which model handled each visit and at what tier. (Note: the AI
+  prompts themselves are sent to Ollama Cloud, which does not log or train on them.)
 - Centralize app logs (Azure Monitor); **no secrets/PII in logs**.
-- Alert on: Tier-1-cloud rejections, failed dispatch backlog, outbox dead-letter
-  growth, `data_policy` drift on pinned models, auth failures spike.
+- Alert on: failed dispatch backlog, outbox dead-letter growth, Ollama Cloud errors/quota,
+  auth failures spike.
 
 ## 10. Pre-go-live checklist
 
@@ -119,6 +130,6 @@ silently downgrading (fail-closed). A scheduled job re-reads each pinned model's
 - [ ] Trivy + pip-audit clean (no HIGH/CRITICAL) in CI gate.
 - [ ] Base images pinned by digest; SBOM archived.
 - [ ] DB/Redis/Qdrant on private network; no public ports.
-- [ ] Tier-1 → on-device + (decision) no Notion/cloud; verified in a Langfuse trace.
+- [ ] Tier-1 handling decision recorded (Notion fan-out? retention?); tier label verified in a Langfuse trace. (No on-device path — all AI is cloud-side via Ollama Cloud.)
 - [ ] Backup + restore tested.
 - [ ] WAF + rate limiting enabled at ingress.

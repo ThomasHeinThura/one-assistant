@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field
 
 from ..config import get_settings
 from ..db import pool, tx
-from ..integrations import openrouter
+from ..integrations import ollama
 from ..integrations.qdrant import QdrantAdapter
 from ..security import require_auth
 from ..workers import _RECORD_SQL, _record_text
@@ -60,15 +60,12 @@ async def test_model(model_id: UUID) -> dict:
     if not row:
         raise HTTPException(404, "model not found")
 
-    if row["provider"] == "on_device":
-        status, ready, detail = "on_device", True, "On-device (Apple MLX) — drafts Tier-1 with no cloud. Test from the iOS app."
-    else:
-        settings = get_settings()
-        # Prefer the key stored on the OpenRouter integration, else the env key.
-        orow = await pool().fetchrow("SELECT env FROM mcp_integrations WHERE name='OpenRouter'")
-        key = (orow["env"] or {}).get("OPENROUTER_API_KEY") if orow else None
-        ok, detail = await openrouter.ping_model(settings, row["model_id"], api_key=key)
-        status, ready = ("ready", True) if ok else ("error", False)
+    settings = get_settings()
+    # Prefer the key stored on the Ollama integration, else the env key.
+    orow = await pool().fetchrow("SELECT env FROM mcp_integrations WHERE name='Ollama'")
+    key = (orow["env"] or {}).get("OLLAMA_API_KEY") if orow else None
+    ok, detail = await ollama.ping_model(settings, row["model_id"], api_key=key)
+    status, ready = ("ready", True) if ok else ("error", False)
 
     await pool().execute(
         "UPDATE ai_models SET ready=$2, status=$3, detail=$4, last_checked_at=now() WHERE id=$1",
@@ -176,7 +173,7 @@ async def test_mcp(mcp_id: UUID) -> dict:
     env = row["env"] or {}
     status, detail = "error", ""
 
-    is_openrouter = row["name"] == "OpenRouter" or "openrouter.ai" in (row["endpoint"] or "")
+    is_ollama = row["name"] == "Ollama" or "ollama.com" in (row["endpoint"] or "")
 
     async def _probe(url: str, headers: dict) -> tuple[str, str, str]:
         try:
@@ -231,14 +228,15 @@ async def test_mcp(mcp_id: UUID) -> dict:
                     detail = f"Notion: HTTP {r.status_code}"
             except Exception as exc:
                 detail = f"Notion: cannot reach host: {str(exc)[:120]}"
-    elif is_openrouter:
-        key = env.get("OPENROUTER_API_KEY")
+    elif is_ollama:
+        key = env.get("OLLAMA_API_KEY")
         if not key:
-            detail = "set OPENROUTER_API_KEY"
+            detail = "set OLLAMA_API_KEY"
         else:
+            base = (row["endpoint"] or "https://ollama.com/v1").rstrip("/")
             status, kind, why = await _probe(
-                "https://openrouter.ai/api/v1/key", {"Authorization": f"Bearer {key}"})
-            detail = "OpenRouter reachable; API key valid" if status == "connected" else f"OpenRouter: {why or kind}"
+                f"{base}/models", {"Authorization": f"Bearer {key}"})
+            detail = "Ollama Cloud reachable; API key valid" if status == "connected" else f"Ollama: {why or kind}"
     else:
         ready = bool(row["endpoint"] or row["command"])
         status = "connected" if ready else "error"

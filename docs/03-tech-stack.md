@@ -13,37 +13,39 @@
 | Vector store | **Qdrant** | Per-client RAG over past MoMs/docs |
 | Cache / pub-sub | **Redis** | Sessions, rate limits, dispatch worker coordination |
 | Tracing | **Langfuse (self-hosted)** | Full prompt/output kept private in-stack |
-| Cloud LLM | **OpenRouter** (OpenAI-compatible) | Gemma 4 free models, no-logging enforced (Tier 2/3) |
+| Cloud LLM | **Ollama Cloud** (OpenAI-compatible) | `gemma4:31b` on the paid "Pro" plan; no logging, no training |
 | HTTP client | **httpx** | Plane/Notion calls and outbound requests |
 | Validation | **Pydantic v2** | CRM schema, structured MoM output |
 
-### Model configuration (OpenRouter — Tier 2/3 only)
+### Model configuration (Ollama Cloud)
 
-- Base URL: `https://openrouter.ai/api/v1`
-- Pinned chain: `google/gemma-4-31b-it:free` → `google/gemma-4-26b-a4b-it:free`
-- **Every request sends** `provider: { data_collection: "deny" }` (fail closed — if no
-  no-logging endpoint exists, the request errors and the MoM is drafted on-device instead).
-- Account setting: training/logging on free models **disabled**.
-- Optional headers: `HTTP-Referer`, `X-Title` (leaderboard attribution only).
+- Base URL: `https://ollama.com/v1` (`OLLAMA_BASE_URL`)
+- Model: `gemma4:31b` (`OLLAMA_MODELS`)
+- Auth: Bearer API key (`OLLAMA_API_KEY`).
+- All AI inference (chat + MoM drafting) runs **server-side** via this endpoint. Ollama Cloud does
+  not log or train on prompts.
+- The paid plan removes the free-tier rate caps and unlocks additional models (deepseek, gpt-oss,
+  etc.) behind the same key.
 
-> Why not `openrouter/free` router or other free models: most free endpoints log prompts/outputs
-> for training. The Nvidia free-endpoint warning is the general rule, not an exception. We pin
-> Gemma 4 and enforce `data_collection: "deny"`. Confidential (Tier 1) client data never goes to
-> cloud at all — its MoM is drafted on-device.
+> Why Ollama Cloud: a single no-logging, no-training endpoint behind one key, with a heavy model
+> (`gemma4:31b`) hosted in Ollama's cloud — nothing self-hosted on the VM. Sensitivity tiers are
+> retained as classification/audit labels, but all AI now runs in the cloud; there is no
+> on-device path.
 
 ## Mobile — new native iOS app (Swift)
 
 | Concern | Choice | Notes |
 |---|---|---|
 | Language / UI | **Swift / SwiftUI** | Fresh native app (not the Expo RN `BIM.Visitplan`) |
-| On-device model | **Gemma 2B** via **Apple MLX** | ~1.5 GB quantized; drafts MoM + tags sensitivity |
+| AI | **Thin cloud client** | No on-device model; all inference (chat, MoM) is server-side via Ollama Cloud |
 | Local storage | **Core Data / SQLite** | Visits, agenda, notes; basic offline capture |
 | Location | **CoreLocation** | GPS check-in / check-out |
-| Networking | **URLSession** → backend CRM API | Sends visit + MoM + tier flags |
+| Networking | **URLSession** → backend CRM API | Sends visit + notes + tier label; receives drafted MoM |
 
 > The shipped `BIM.Visitplan` (Expo/React Native) is the **design + data-model reference**, not the
-> codebase we extend. The new app is built natively in Swift, which also makes Apple MLX the natural
-> on-device runtime for Gemma 2B.
+> codebase we extend. The new app is built natively in Swift and is a **thin cloud client**: it
+> captures visits/notes and renders AI output, but runs no model itself — all AI runs server-side
+> via Ollama Cloud.
 
 ## Infrastructure
 

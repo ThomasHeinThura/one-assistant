@@ -68,7 +68,7 @@ actor APIClient {
         _ = try await request("visits/\(visit)/checkin", method: "POST", body: Body(lat: lat, lng: lng))
     }
 
-    /// Save the on-device-drafted MoM, then confirm to trigger the 3-system fan-out.
+    /// Save the cloud-drafted MoM, then confirm to trigger the 3-system fan-out.
     func saveMoM(visit: UUID, mom: MoM) async throws -> UUID {
         struct Created: Decodable { let id: UUID }
         let data = try await request("visits/\(visit)/mom", method: "POST", body: mom)

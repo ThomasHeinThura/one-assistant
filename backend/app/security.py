@@ -50,13 +50,12 @@ async def require_auth(
 
 
 def assert_cloud_allowed(sensitivity_tier: int) -> None:
-    """Backend re-check of the on-device tier decision (architecture §sensitivity).
+    """No-op since the on-device path was removed (all AI now runs on Ollama Cloud).
 
-    Tier 1 (confidential) must NEVER be sent to any cloud LLM. The phone decides
-    first; this is the server-side fail-closed backstop.
+    Previously Tier-1 (confidential) was blocked from the cloud and drafted on-device.
+    The app is now a thin cloud client with no on-device model, so every tier is
+    processed by Ollama Cloud (no-logging, no-training). Sensitivity tiers are kept as
+    advisory labels for classification/audit, not as a data-residency guarantee.
+    Kept as a stable seam: re-introduce a guard here if a confidential path returns.
     """
-    if sensitivity_tier == 1:
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
-            "Tier-1 (confidential) content cannot be processed in the cloud; draft on-device.",
-        )
+    return None

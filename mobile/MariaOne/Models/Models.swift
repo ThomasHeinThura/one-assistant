@@ -1,10 +1,12 @@
 import Foundation
 
-/// Sensitivity tier decided ON-DEVICE before anything leaves the phone.
+/// Sensitivity tier — an advisory label carried on the visit/MoM for classification
+/// and audit. All AI now runs in the cloud (Ollama Cloud, no-logging); there is no
+/// on-device path, so the tier no longer routes data on- vs off-device.
 enum SensitivityTier: Int, Codable, CaseIterable {
-    case confidential = 1   // 🔴 banking/client data — on-device only, never cloud
-    case internalUse  = 2   // 🟡 cloud allowed with no-logging enforced
-    case publicTest   = 3   // 🟢 any free model
+    case confidential = 1   // 🔴 banking/client data — handled in the cloud (no-logging)
+    case internalUse  = 2   // 🟡 internal/partner
+    case publicTest   = 3   // 🟢 public/test
 
     var label: String {
         switch self {
@@ -49,13 +51,13 @@ struct ActionItem: Codable, Hashable {
     var due_date: String?
 }
 
-/// Structured Minutes of Meeting — drafted on-device for Tier 1.
+/// Structured Minutes of Meeting — drafted in the cloud (Ollama Cloud).
 struct MoM: Codable {
     var attendees: [String]
     var discussion: String
     var decisions: [String]
     var next_visit_date: String?
-    var drafted_by: String       // on_device | cloud
+    var drafted_by: String       // cloud
     var action_items: [ActionItem]
 }
 

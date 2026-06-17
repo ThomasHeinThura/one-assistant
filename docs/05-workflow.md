@@ -43,20 +43,21 @@ answer questions about any ticket.
 
 3. **Capture notes.** During or right after the meeting you jot raw notes (text now; voice later).
 
-4. **On-device tagging (Gemma 2B).** Before anything leaves the phone, Gemma assigns a
-   **sensitivity tier** (🔴 confidential / 🟡 internal / 🟢 public). Banking-client visits are
-   Tier 1.
+4. **Sensitivity labelling.** On the phone you set a **sensitivity tier**
+   (🔴 confidential / 🟡 internal / 🟢 public). Banking-client visits are Tier 1. The tier is a
+   classification/audit label that travels with the visit — it does not change where the AI runs.
 
-5. **Draft the MoM.** Gemma (or, for Tier 2/3, the backend) turns the agenda + raw notes into a
-   structured **Minutes of Meeting**:
+5. **Draft the MoM.** The backend (via **Ollama Cloud**, `gemma4:31b`) turns the agenda + raw notes
+   into a structured **Minutes of Meeting**:
    - attendees,
    - discussion summary,
    - **decisions**,
    - **action items** with an owner and due date,
    - a suggested next-visit date.
 
-   Tier 1 is drafted **entirely on-device** — no cloud. Tier 2/3 may use **OpenRouter Gemma 4 free**
-   with `data_collection: "deny"`, with **Qdrant RAG** pulling the client's past MoMs/docs as context.
+   All MoM drafting runs server-side in the cloud (Ollama Cloud does not log or train on prompts),
+   with **Qdrant RAG** pulling the client's past MoMs/docs as context. The tier is recorded on the
+   trace for audit.
 
 6. **Review & confirm.** You read the draft, fix anything, and confirm. Nothing is created in CRM,
    Plane, or Notion until you confirm.
@@ -71,25 +72,22 @@ answer questions about any ticket.
    re-runs are **idempotent**, so nothing is duplicated.
 
 8. **Trace.** MoM drafting and all three dispatch calls are recorded as a single **Langfuse** trace
-   keyed by the visit — tokens, cost, latency, tier, destinations — so you can confirm confidential
-   visits never touched the cloud.
+   keyed by the visit — tokens, cost, latency, tier, destinations — so you have a full audit of
+   which model handled each visit and at what sensitivity tier.
 
 9. **Observe.** The dashboard shows the visit, its MoM status, and each destination's dispatch
    status (pending / done + ID / failed).
 
-## The key decision — where the MoM is drafted
+## How the MoM is drafted
 
 ```mermaid
 flowchart TD
-  A["Visit notes + agenda"] --> B{"Gemma 2B:<br/>tier?"}
-  B -->|🔴 Tier 1 confidential| C["Draft MoM on-device<br/>(never cloud)"]
-  B -->|🟡/🟢 Tier 2-3| D{"Heavy draft<br/>needed?"}
-  D -->|No| E["Draft on-device"]
-  D -->|Yes| F["Backend → OpenRouter<br/>Gemma 4 (deny) + RAG"]
-  C --> G["Review → confirm → dispatch"]
-  E --> G
-  F --> G
+  A["Visit notes + agenda<br/>(+ tier label)"] --> F["Backend → Ollama Cloud<br/>gemma4:31b + RAG"]
+  F --> G["Review → confirm → dispatch"]
 ```
+
+All MoM drafting runs server-side via Ollama Cloud regardless of tier; the tier rides along as an
+audit label on the trace.
 
 ## Team & tickets (later phase)
 
@@ -99,6 +97,7 @@ Entra login. The MVP stays single-user.
 
 ## Offline behavior
 
-If the phone is offline, the visit, agenda, notes, and the on-device MoM draft are kept locally.
-When connectivity returns, the visit syncs to the CRM and — once you confirm — dispatch runs the
-normal fan-out → trace path.
+If the phone is offline, the visit, agenda, and notes are kept locally. MoM drafting needs the
+backend (Ollama Cloud), so it waits until connectivity returns; the visit then syncs to the CRM,
+the MoM is drafted server-side, and — once you confirm — dispatch runs the normal fan-out → trace
+path.
