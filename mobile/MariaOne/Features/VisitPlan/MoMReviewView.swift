@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// The hero screen the HTML mockup was missing: structured MoM review/edit before
-/// confirm, with the on-device/cloud indicator + tier, then per-destination
-/// dispatch status after confirm.
+/// Structured MoM review/edit before confirm, then per-destination dispatch status
+/// after confirm. Drafting happens in the cloud (backend → Ollama Cloud); the app is
+/// a thin client. The sensitivity tier is metadata carried on the visit record.
 struct MoMReviewView: View {
     let visit: Visit
     let notes: String
@@ -12,14 +12,15 @@ struct MoMReviewView: View {
     @State private var momID: UUID?
     @State private var dispatch: [DispatchTarget] = []
     @State private var working = false
-    @State private var drafting = false
 
     init(visit: Visit, notes: String) {
         self.visit = visit
         self.notes = notes
-        let t = SensitivityClassifier().classify(agenda: visit.title, notes: notes)
-        _tier = State(initialValue: t)
-        _mom = State(initialValue: MoMDrafter().draftOnDevice(agenda: visit.title, notes: notes, tier: t))
+        _tier = State(initialValue: SensitivityTier(rawValue: visit.sensitivity_tier) ?? .internalUse)
+        // Seed the editable draft with the raw notes; the user refines before confirm.
+        _mom = State(initialValue: MoM(
+            attendees: [], discussion: notes, decisions: [],
+            next_visit_date: nil, drafted_by: "cloud", action_items: []))
     }
 
     var body: some View {
@@ -34,18 +35,10 @@ struct MoMReviewView: View {
                 HStack {
                     Text("Drafted").foregroundStyle(.secondary)
                     Spacer()
-                    Text(mom.drafted_by == "on_device" ? "On-device (no cloud)" : "Cloud (no-logging)")
-                }
-                if tier == .confidential {
-                    Label("Confidential — stays on this device", systemImage: "lock.fill")
-                        .font(.caption).foregroundStyle(.red)
+                    Text("Cloud (Ollama, no-logging)")
                 }
             }
             Section {
-                if drafting {
-                    Label("Drafting minutes on-device…", systemImage: "cpu")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
                 TextEditor(text: $mom.discussion).frame(minHeight: 100)
             } header: { Text("Discussion") }
             Section("Decisions") {
@@ -78,22 +71,6 @@ struct MoMReviewView: View {
             }
         }
         .navigationTitle("Review MoM")
-        .task { await enhanceOnDevice() }
-    }
-
-    /// Summarise the raw notes into clean minutes using the on-device model.
-    /// Tier-1 confidential drafting NEVER uses the cloud — this runs locally only.
-    private func enhanceOnDevice() async {
-        guard OnDeviceAI.isReady, !notes.isEmpty else { return }
-        drafting = true; defer { drafting = false }
-        let prompt = "Summarise these meeting notes into 2–3 clear sentences of minutes. "
-                   + "Keep it factual.\nAGENDA: \(visit.title)\nNOTES: \(notes)"
-        if let summary = try? await OnDeviceAI.generate(
-                prompt: prompt, instructions: "You write concise, factual meeting minutes."),
-           !summary.isEmpty {
-            mom.discussion = summary
-            mom.drafted_by = "on_device"
-        }
     }
 
     private func confirm() async {

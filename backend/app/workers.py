@@ -109,7 +109,8 @@ async def _record_text(aggregate: str, aggregate_id: str) -> tuple[str, int] | N
 async def reindex(settings, aggregate: str, aggregate_id: str, span) -> None:
     """Embed the changed record into Qdrant (RAG). Tier-aware embedding backend.
 
-    Tier-1 confidential rows are skipped server-side (they live only on-device).
+    Tier-1 confidential rows are kept out of the vector store as a conservative
+    default (the tier is an advisory label; nothing else routes on it now).
     """
     info = await _record_text(aggregate, aggregate_id)
     if info is None:
@@ -117,7 +118,7 @@ async def reindex(settings, aggregate: str, aggregate_id: str, span) -> None:
         return
     text, tier = info
     if tier == 1:
-        span.event("reindex.skip", {"id": aggregate_id, "reason": "tier-1 stays on-device"})
+        span.event("reindex.skip", {"id": aggregate_id, "reason": "tier-1 excluded from RAG"})
         return
     qd = QdrantAdapter(settings)
     wrote = await qd.upsert(source_id=f"{aggregate}:{aggregate_id}", text=text,

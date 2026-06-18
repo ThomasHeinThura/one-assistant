@@ -1,23 +1,23 @@
 # Maria One — iOS app (Swift / SwiftUI)
 
 Native iPhone client. Four tabs (Today · VisitPlan · CRM · Tickets) + the Maria
-quick-chat. The **on-device Gemma 2B (Apple MLX)** drafts the MoM and assigns the
-sensitivity tier *before anything leaves the phone*; the app then talks to the
-backend CRM API over HTTPS.
+quick-chat. The app is a **thin cloud client**: all AI (chat, MoM drafting) runs
+server-side in the backend, which calls **Ollama Cloud** (`gemma4:31b`). There is
+no on-device model — the app just talks to the backend CRM API over HTTPS.
 
 > This is a **structural scaffold**. It is not built here (needs macOS + Xcode 15+).
-> Open in Xcode as a new iOS App target and drop these files under the app group,
-> or use the included `Package.swift` for the model/networking layer.
+> Open in Xcode as a new iOS App target and drop these files under the app group.
 
 ## Build
 
 1. Xcode → New → App (SwiftUI, iOS 17+), product name `MariaOne`.
 2. Add the files under `MariaOne/` to the target.
-3. Add **MLX Swift** (`github.com/ml-explore/mlx-swift`) + an MLX Gemma 2B
-   package for on-device drafting (`OnDevice/`), and grant Location permission
-   (`NSLocationWhenInUseUsageDescription`) for GPS check-in.
+3. Grant Location permission (`NSLocationWhenInUseUsageDescription`) for GPS check-in.
 4. Set `Config.apiBaseURL` and store the API bearer token in the **Keychain**
    (never in `Info.plist` or source).
+
+No Swift packages or on-device model dependencies are required — the app is pure
+SwiftUI + URLSession.
 
 ## Layout
 
@@ -27,22 +27,21 @@ MariaOne/
 ├── Config.swift                 # base URL, Keychain token accessor
 ├── Networking/APIClient.swift   # URLSession async client -> backend
 ├── Models/Models.swift          # Codable mirrors of the API
-├── OnDevice/
-│   ├── SensitivityClassifier.swift  # Gemma/MLX -> Tier 1/2/3 (on-device)
-│   └── MoMDrafter.swift             # on-device MoM draft (Tier 1 never leaves)
 └── Features/
     ├── RootTabView.swift        # 4 tabs + chat FAB
     ├── Today/TodayView.swift
     ├── VisitPlan/VisitListView.swift
-    ├── VisitPlan/MoMReviewView.swift    # the hero screen the mockup lacked
+    ├── VisitPlan/MoMReviewView.swift    # review/edit the MoM, then confirm + dispatch
     ├── CRM/CRMView.swift
-    ├── Tickets/TicketsView.swift        # list + DETAIL (the "check ticket" gap)
-    └── Chat/MariaChatView.swift
+    ├── Tickets/TicketsView.swift        # list + detail
+    └── Chat/MariaChatView.swift         # cloud chat (POST /chat)
 ```
 
-## Privacy / tier rules enforced in the app
+## Privacy / data handling
 
-- The classifier tags each visit **on-device**. **Tier 1 → MoM drafted locally,
-  no network LLM call ever.** The app sends `drafted_by: on_device` and the
-  backend re-checks (`assert_cloud_allowed`) as defense in depth.
-- Re-auth (Face ID) on resume before showing Tier-1 content.
+- All AI inference happens in the cloud (backend → Ollama Cloud, which does not log
+  or train on prompts). The on-device path was removed, so meeting notes and chat
+  leave the phone to the backend over HTTPS.
+- The **sensitivity tier** (1/2/3) is an advisory label carried on the visit/MoM for
+  classification and audit — it no longer keeps data on-device.
+- Re-auth (Face ID) on resume still protects access to the app and its data.

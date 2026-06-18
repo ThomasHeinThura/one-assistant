@@ -298,7 +298,7 @@
               <tbody>
                 <tr><td>Tier-1 cloud rejections</td><td class="note">backend guard</td><td><span class="pill risk"><span class="d"></span>any</span></td></tr>
                 <tr><td>Dispatch dead-letter</td><td class="note">outbox</td><td><span class="pill warn"><span class="d"></span>growth</span></td></tr>
-                <tr><td>Model data_policy drift</td><td class="note">OpenRouter</td><td><span class="pill warn"><span class="d"></span>change</span></td></tr>
+                <tr><td>Model data_policy drift</td><td class="note">Ollama</td><td><span class="pill warn"><span class="d"></span>change</span></td></tr>
                 <tr><td>Auth failures</td><td class="note">API</td><td><span class="pill warn"><span class="d"></span>spike</span></td></tr>
               </tbody>
             </table>
@@ -404,13 +404,13 @@
       <section class="view" id="v-ai">
         <div class="page-intro">
           <h2>AI &amp; models</h2>
-          <p>Cloud LLM applies to Tier 2/3 only. Tier 1 (confidential) is drafted entirely on-device
-             and is <b>never</b> sent to the cloud.</p>
+          <p>All AI runs in the cloud via Ollama Cloud (no prompt logging/training). There is no
+             on-device model; sensitivity tiers are advisory labels for classification and audit.</p>
         </div>
 
         <div class="card" style="margin-bottom:16px">
           <div class="card-h"><div><div class="ttl">Models</div>
-            <div class="desc">On-device Gemma 2B (MLX) + OpenRouter cloud chain. Test each for readiness.</div></div>
+            <div class="desc">Ollama Cloud (gemma4:31b). Test for readiness.</div></div>
             <span class="note" id="modelReady"></span></div>
           <div class="card-b flush">
             <table id="modelTbl">
@@ -422,14 +422,14 @@
         </div>
 
         <div class="card" style="max-width:680px">
-          <div class="card-h"><div><div class="ttl">OpenRouter</div>
-            <div class="desc">Pinned no-logging chain · <code>data_collection: "deny"</code> (fail-closed).</div></div>
+          <div class="card-h"><div><div class="ttl">Ollama Cloud</div>
+            <div class="desc">Cloud LLM (Tier 2/3) · no prompt logging/training. Free tier: one model.</div></div>
             <span class="pill ai" id="orStatus"><span class="d"></span>not saved</span></div>
           <div class="card-b">
             <div class="form" style="grid-template-columns:1fr">
-              <div class="field"><label>API key</label><input id="orKey" type="password" placeholder="sk-or-…"/></div>
-              <div class="field"><label>Pinned no-logging model chain (ordered)</label>
-                <input id="orModels" value="google/gemma-4-31b-it:free, google/gemma-4-26b-a4b-it:free"/></div>
+              <div class="field"><label>API key</label><input id="orKey" type="password" placeholder="id.secret"/></div>
+              <div class="field"><label>Pinned cloud model(s)</label>
+                <input id="orModels" value="gemma4:31b"/></div>
               <div class="field"><label>Tier-1 cloud guard</label>
                 <select id="tier1"><option>Block (recommended)</option><option>Warn only</option></select></div>
             </div>
@@ -488,7 +488,7 @@
     window.scrollTo({top:0,behavior:'smooth'});
   });
 
-  // ---------- OpenRouter ----------
+  // ---------- Ollama Cloud ----------
   document.getElementById('saveOR').onclick = () => {
     const s = document.getElementById('orStatus');
     s.innerHTML = '<span class="d"></span>saved'; s.className = 'pill ok';

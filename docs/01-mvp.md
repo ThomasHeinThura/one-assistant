@@ -33,15 +33,16 @@ The CRM is **built in-house** in the backend (replacing Cockpit). The data model
 - **Tickets module.** List/update Plane tickets; create a ticket with an assignee; Maria suggests
   the assignee from history (RAG).
 - **CRM module.** Pipeline list with AI health flags (healthy / watch / at-risk).
-- **On-device Gemma 2B (Apple MLX).** Drafts MoM and tags sensitivity tier; confidential client
-  data stays on-device.
+- **Cloud AI via Ollama Cloud (`gemma4:31b`).** All AI — chat and MoM drafting — runs server-side;
+  the backend calls Ollama Cloud (no-logging, no-training). Visits/MoMs carry a sensitivity tier as
+  a classification/audit label.
 - **Self-hosted Langfuse.** One trace per visit/MoM and per dispatch call.
 
 ## Out of scope (deferred)
 
 - **Team / multi-user.** The 14-member shared CRM, team ticket assignment across members, Microsoft
   Entra login, and role-based access come in a later phase. MVP is single-user.
-- **Backend CPU Gemma fallback** for devices that can't run the model locally.
+- **Alternative model routing** (deepseek, gpt-oss, etc. behind the same Ollama Cloud key).
 - **Pipeline/forecast reporting** (target vs actuals dashboards) beyond the health flag.
 - **Offline-everything.** Basic offline capture only; full offline CRM sync later.
 - **Other channels** (Telegram, etc.).
@@ -57,7 +58,8 @@ The CRM is **built in-house** in the backend (replacing Cockpit). The data model
 4. You can create a ticket with an assignee, and ask Maria "show me ticket X" / "open MS tickets for
    client Y" and get a correct answer from RAG.
 5. New visits/deals/tickets are **auto re-indexed** so chat answers reflect them within minutes.
-6. A **Tier 1 (confidential)** visit drafts its MoM **on-device** with no cloud traffic.
+6. A **Tier 1 (confidential)** visit is labelled as such and its MoM (drafted in the cloud via
+   Ollama Cloud's no-logging endpoint) carries the tier through the trace and audit log.
 7. Re-running dispatch never creates duplicate entries.
 
 ## Milestones
@@ -69,4 +71,4 @@ The CRM is **built in-house** in the backend (replacing Cockpit). The data model
 | M2 | AI coordinator | Inline suggestions + quick-chat over RAG; auto re-index on writes |
 | M3 | VisitPlan + MoM | Visit loop → AI MoM → confirm; trace in Langfuse |
 | M4 | Dispatch fan-out | Confirmed MoM creates CRM outcome + Plane ticket + Notion note (idempotent) |
-| M5 | iOS app (4 tabs) | Swift app: Today / VisitPlan / CRM / Tickets + AI chat; on-device MoM + tier tag |
+| M5 | iOS app (4 tabs) | Swift app: Today / VisitPlan / CRM / Tickets + AI chat (thin cloud client); MoM drafted server-side + tier tag |

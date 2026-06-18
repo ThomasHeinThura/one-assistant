@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS contacts (
   created_at  timestamptz NOT NULL DEFAULT now()
 );
 
--- sensitivity tier: 1=confidential (on-device only), 2=internal, 3=public
+-- sensitivity tier (advisory label): 1=confidential, 2=internal, 3=public
 CREATE TABLE IF NOT EXISTS visits (
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   title         text NOT NULL,
@@ -110,7 +110,7 @@ CREATE TABLE IF NOT EXISTS meeting_minutes (
   decisions        jsonb NOT NULL DEFAULT '[]',
   next_visit_date  date,
   status           text NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','confirmed')),
-  drafted_by       text NOT NULL DEFAULT 'on_device' CHECK (drafted_by IN ('on_device','cloud')),
+  drafted_by       text NOT NULL DEFAULT 'cloud' CHECK (drafted_by IN ('on_device','cloud')),
   sensitivity_tier smallint NOT NULL DEFAULT 2 CHECK (sensitivity_tier IN (1,2,3)),
   content_hash     text,                 -- for RAG drift detection (Check 2)
   confirmed_at     timestamptz,

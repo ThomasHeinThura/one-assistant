@@ -53,7 +53,7 @@ present across all of them.
 
 ## AI Minutes of Meeting (the hero feature)
 
-- ✅ **MoM drafting** — Gemma turns agenda + raw notes into structured minutes:
+- ✅ **MoM drafting** — the backend (via Ollama Cloud, `gemma4:31b`) turns agenda + raw notes into structured minutes:
   attendees, discussion summary, **decisions**, and **action items (owner + due date)**.
 - ✅ **Review & edit** — you correct/approve the draft before anything is created.
 - ✅ **Action-item extraction** — each action becomes a candidate Plane ticket.
@@ -86,15 +86,18 @@ present across all of them.
 - ✅ **Ask about a ticket** — query Maria for a specific ticket or a client's open tickets.
 - 🧭 **Team board (14 members)** — view/manage the whole team's tickets, scoped by role.
 
-## On-device intelligence (Gemma 2B, Apple MLX)
+## Cloud AI (Ollama Cloud, `gemma4:31b`)
 
-- ✅ **Sensitivity tagging** — classify each visit/MoM into a tier *before* anything leaves the phone:
-  - 🔴 **Tier 1 — confidential** (client/banking data): MoM drafted on-device, never sent to cloud.
-  - 🟡 **Tier 2 — internal**: cloud allowed only with no-logging enforced.
-  - 🟢 **Tier 3 — public/testing**: any free model.
-- ✅ **On-device MoM drafting** — Tier-1 visits are summarized entirely on the phone.
-- 🔜 **Cloud escalation** — Tier-2/3 may use OpenRouter Gemma 4 free with `data_collection: "deny"`
-  for heavier drafting.
+- ✅ **Cloud-only inference** — all AI (chat + MoM drafting) runs server-side; the backend calls
+  Ollama Cloud's OpenAI-compatible endpoint. Ollama Cloud does not log or train on prompts.
+- ✅ **Sensitivity tagging** — classify each visit/MoM into a tier as a metadata/audit label:
+  - 🔴 **Tier 1 — confidential** (client/banking data).
+  - 🟡 **Tier 2 — internal**.
+  - 🟢 **Tier 3 — public/testing**.
+  The tier is retained for classification and audit; it no longer keeps data on-device, because all
+  AI now runs in the cloud (there is no on-device path).
+- 🔜 **Additional models** — the paid Ollama Cloud plan unlocks other models (deepseek, gpt-oss, etc.)
+  behind the same key for heavier drafting.
 
 ## Knowledge & retrieval
 
@@ -110,7 +113,7 @@ present across all of them.
 
 ## Security & privacy
 
-- ✅ **Tier-1 cloud block** — the backend rejects any Tier-1 MoM flagged for cloud (defense in depth).
-- ✅ **No-logging enforcement** — every cloud call sends `data_collection: "deny"`; account-level
-  training disabled.
+- ✅ **No-logging cloud provider** — all AI runs via Ollama Cloud, which does not log or train on
+  prompts. Sensitivity tiers are retained as classification/audit labels, not as an on-device
+  routing guarantee (there is no on-device path anymore).
 - 🧭 **Encryption at rest** — encrypt stored attachments.

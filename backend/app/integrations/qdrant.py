@@ -3,12 +3,10 @@
 Each vector carries source_id + content_hash so the verifier can detect drift
 and re-embed (docs/07-datastore.md, Check 2).
 
-Tier-1 note: confidential content must be embedded with an ON-DEVICE / self-hosted
-model, never a cloud embedding API. We use **fastembed** (ONNX, runs in-process —
-no network, no cloud) as the self-hosted backend, so Tier-2/3 RAG works offline.
-`embed()` still fails closed if a cloud embedding backend were ever enabled for
-Tier-1 content. Tier-1 confidential drafting stays on the phone and never reaches
-this service at all.
+Embeddings are self-hosted: we use **fastembed** (ONNX, runs in-process — no network,
+no cloud), so RAG works offline. Tier-1 confidential rows are excluded from the vector
+store entirely (see workers.reindex); `embed()` additionally fails closed if a cloud
+embedding backend were ever enabled for Tier-1 content.
 """
 from __future__ import annotations
 

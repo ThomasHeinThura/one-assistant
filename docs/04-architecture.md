@@ -6,10 +6,8 @@
 
 ```mermaid
 flowchart TD
-  subgraph Phone["iOS app (Swift / SwiftUI)"]
-    VIS["Visit UI<br/>plan · check-in · notes"]
-    GEMMA["Gemma 2B (Apple MLX)<br/>MoM draft + sensitivity tag"]
-    VIS --> GEMMA
+  subgraph Phone["iOS app (Swift / SwiftUI) — thin cloud client"]
+    VIS["Visit UI<br/>plan · check-in · notes · tier label"]
   end
 
   subgraph Backend["Backend (Docker)"]
@@ -21,8 +19,8 @@ flowchart TD
     LF["Langfuse (self-hosted)"]
   end
 
-  subgraph Cloud["Cloud LLM (Tier 2/3 only)"]
-    OR["OpenRouter<br/>Gemma 4 free · data_collection=deny"]
+  subgraph Cloud["Cloud LLM (all AI)"]
+    OR["Ollama Cloud<br/>gemma4:31b · no logging / no training"]
   end
 
   subgraph Ext["External destinations"]
@@ -30,11 +28,11 @@ flowchart TD
     NMCP["Notion MCP<br/>meeting notes"]
   end
 
-  GEMMA -->|"visit + draft MoM (+tier)"| API
+  VIS -->|"visit + notes (+tier label)"| API
   API --> CRM
   API --> ORCH
   ORCH --> QD
-  ORCH -->|Tier 2/3 heavier draft| OR
+  ORCH -->|MoM draft| OR
   ORCH --> API
   API -->|on confirm| DISP
   DISP --> CRM
@@ -103,24 +101,20 @@ See [06-workflows.md](06-workflows.md) for the full deal lifecycle and per-modul
 ```mermaid
 sequenceDiagram
   participant U as User
-  participant P as iOS app (Gemma 2B)
+  participant P as iOS app (thin client)
   participant A as Backend CRM API
-  participant O as AgentScope (MoM)
+  participant O as AgentScope (MoM) → Ollama Cloud
   participant D as Dispatch worker
   participant X as CRM + Plane + Notion
   participant L as Langfuse
 
   U->>P: Plan visit, check in (GPS), take notes
-  P->>P: Tag sensitivity tier
-  alt Tier 1 (confidential)
-    P->>P: Draft MoM on-device
-  else Tier 2/3
-    P->>A: Send agenda + notes
-    A->>O: Draft MoM (RAG context)
-    O->>L: Trace (tokens, cost)
-    O-->>A: Structured MoM
-    A-->>P: Draft MoM
-  end
+  P->>P: Label sensitivity tier (metadata)
+  P->>A: Send agenda + notes (+tier label)
+  A->>O: Draft MoM via Ollama Cloud (RAG context)
+  O->>L: Trace (tokens, cost, tier)
+  O-->>A: Structured MoM
+  A-->>P: Draft MoM
   U->>P: Review + confirm MoM
   P->>A: Confirm (visit_id, MoM)
   A->>D: Enqueue dispatch (status = pending)
@@ -132,18 +126,19 @@ sequenceDiagram
 
 ## Sensitivity-tier policy
 
-The phone decides the tier **before any data leaves the device**. The backend re-checks as defense
-in depth.
+Tiers are **advisory classification/audit labels**, not a routing guarantee. All AI now runs in the
+cloud via **Ollama Cloud** (no logging, no training) — there is no on-device path. The tier is set
+on the phone and carried through to the trace and audit log; it no longer keeps any data on-device.
 
-| Tier | Example | MoM drafting path | Cloud allowed? |
-|---|---|---|---|
-| 🔴 1 Confidential | Banking client meeting | On-device Gemma 2B only | **No** |
-| 🟡 2 Internal | Internal/partner meeting | OpenRouter Gemma 4 free + `data_collection: "deny"` | Yes, no-logging only |
-| 🟢 3 Public/testing | Generic / test content | Any free model | Yes |
+| Tier | Example | Label use |
+|---|---|---|
+| 🔴 1 Confidential | Banking client meeting | Flagged for review/audit; MoM still drafted in the cloud |
+| 🟡 2 Internal | Internal/partner meeting | Internal classification for reporting |
+| 🟢 3 Public/testing | Generic / test content | Lowest-sensitivity marker |
 
-**Enforcement:** every cloud request sends `provider: { data_collection: "deny" }` (fail closed).
-The backend rejects any Tier-1 MoM flagged for cloud. A periodic check of each pinned model's
-`data_policy` (via the OpenRouter models API) alerts if a previously no-logging endpoint changes.
+**Honest posture:** the previous guarantee that Tier-1 confidential data never left the device is
+**gone** — all AI is cloud-side now. The privacy basis is the provider: Ollama Cloud does not log or
+train on prompts. Every AI call is traced in Langfuse with its tier for audit.
 
 ## In-house CRM data model
 
@@ -165,7 +160,7 @@ Built in PostgreSQL, ported from `BIM.Visitplan` (replacing Cockpit). Single-use
 ### MoM (greenfield — the AI value-add)
 
 - **meeting_minutes** — `id, visit_id, attendees[], discussion, decisions[],
-  next_visit_date, status(draft|confirmed), drafted_by(on_device|cloud), confirmed_at`
+  next_visit_date, status(draft|confirmed), drafted_by(cloud), confirmed_at`
 - **action_items** — `id, mom_id, description, owner, due_date,
   dispatched_plane_id` (replaces the old `next_action` text/regex hack)
 

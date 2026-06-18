@@ -5,8 +5,8 @@ Langfuse, run with Docker Compose locally and deployed to **Azure Container Apps
 (see [../deploy/azure](../deploy/azure)).
 
 > **Why Python/FastAPI and not Go/gRPC?** The heavy model (Gemma 2B) runs
-> **on-device** (Apple MLX), never on the server — the backend only makes HTTP
-> calls to OpenRouter for Tier 2/3. The workload is therefore **I/O-bound**
+> **on-device** (llama.cpp), never on the server — the backend only makes HTTP
+> calls to Ollama Cloud for Tier 2/3. The workload is therefore **I/O-bound**
 > (Postgres, external APIs, Qdrant), where async FastAPI is more than enough and
 > language choice is noise next to network latency. Python also gives us the
 > AgentScope + RAG ecosystem directly. If one worker ever becomes a hot path, the
@@ -24,7 +24,7 @@ Then:
 
 - API & OpenAPI docs: http://localhost:8000/docs (disabled in prod)
 - Liveness / readiness: http://localhost:8000/healthz · /readyz
-- Ops console (OpenRouter, workload, **MCP integrations**, **skills**): http://localhost:8000/admin
+- Ops console (Ollama, workload, **MCP integrations**, **skills**): http://localhost:8000/admin
   - Manage MCP servers (Plane/Notion/custom) and agent skills; run the default
     `echo-test` skill to smoke-test the agent/MCP pipeline. API under `/admin/api/*`.
 - Tracing (Langfuse): **not run locally** — self-hosted v3 needs ~16 GiB (ClickHouse +
@@ -47,8 +47,8 @@ backend/
 │   ├── security.py        # bearer auth + Tier-1 cloud guard (fail-closed)
 │   ├── workers.py         # relay (outbox→bus) + consumer (reindex/dispatch), traced
 │   ├── routers/           # today, clients, visits(+MoM+dispatch), opportunities, tickets, chat, health, admin_api
-│   ├── integrations/      # openrouter (deny-logging), plane, notion, qdrant, langfuse_client
-│   └── admin/index.html   # ops console (OpenRouter, workload, MCP integrations, skills)
+│   ├── integrations/      # ollama (cloud LLM), plane, notion, qdrant, langfuse_client
+│   └── admin/index.html   # ops console (Ollama, workload, MCP integrations, skills)
 ├── migrations/            # 001_init.sql, 002_seed.sql, 003_mcp_skills.sql
 ├── Dockerfile             # multi-stage, non-root (uid 10001), healthcheck
 └── docker-compose.yml     # db, redis, qdrant, api, worker, langfuse

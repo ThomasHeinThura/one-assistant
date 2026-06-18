@@ -45,11 +45,12 @@ Notion stay as external integrations.
   attention — she doesn't take over your actions.
 - **Module SOPs + workflows.** Each module (VisitPlan / CRM / Tickets) has its own guided workflow.
 - **AI writes the MoM.** Attendees, discussion, decisions, action items (owner + due date) — drafted
-  by **Gemma 2B on-device (Apple MLX)**, reviewed by you before anything is created.
+  server-side by **Ollama Cloud (`gemma4:31b`)**, reviewed by you before anything is created.
 - **One confirm, three destinations.** Confirm a visit's MoM once, fan out to CRM + Plane + Notion.
 - **Always current.** Auto re-indexing keeps the RAG knowledge base fresh for chat + suggestions.
-- **Privacy by tier.** Confidential client data is tagged on-device and never sent to logged/free
-  cloud endpoints. See [docs/04-architecture.md](docs/04-architecture.md).
+- **Cloud AI, no-logging provider.** All AI runs via Ollama Cloud, which does not log or train on
+  prompts. Sensitivity tiers are kept as classification/audit labels (the app is a thin cloud
+  client — no on-device model). See [docs/04-architecture.md](docs/04-architecture.md).
 - **Traced everywhere.** Self-hosted Langfuse records every model call and workflow step.
 
 ## Scope

@@ -38,7 +38,7 @@ class MoMIn(BaseModel):
     discussion: str | None = None
     decisions: list[str] = Field(default_factory=list)
     next_visit_date: date | None = None
-    drafted_by: str = Field(default="on_device", pattern="^(on_device|cloud)$")
+    drafted_by: str = Field(default="cloud", pattern="^(on_device|cloud)$")  # cloud only now; pattern kept for back-compat
     action_items: list[dict] = Field(default_factory=list)  # {description, owner_id?, due_date?}
 
 
@@ -99,13 +99,15 @@ async def toggle_agenda(item_id: UUID, completed: bool) -> dict:
 
 @router.post("/{visit_id}/mom", status_code=201)
 async def upsert_mom(visit_id: UUID, body: MoMIn) -> dict:
-    """Save a DRAFT MoM (drafted on-device or in cloud). Nothing is dispatched yet."""
+    """Save a DRAFT MoM. Nothing is dispatched yet.
+
+    All drafting now happens in the cloud (Ollama Cloud); the on-device path was
+    removed, so there is no Tier-1 cloud restriction here anymore.
+    """
     visit = await pool().fetchrow("SELECT sensitivity_tier FROM visits WHERE id=$1", visit_id)
     if not visit:
         raise HTTPException(404, "visit not found")
     tier = visit["sensitivity_tier"]
-    if tier == 1 and body.drafted_by == "cloud":
-        raise HTTPException(422, "Tier-1 MoM cannot be drafted in the cloud")
     async with tx() as conn:
         mom = await conn.fetchrow(
             """INSERT INTO meeting_minutes
